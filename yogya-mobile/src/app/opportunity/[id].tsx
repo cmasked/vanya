@@ -11,6 +11,7 @@
  */
 
 import { router, useLocalSearchParams } from 'expo-router';
+import {ReadinessPanel} from '@/components/ReadinessPanel';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -82,7 +83,7 @@ export default function OpportunityDetailScreen() {
   const [isFitCheckOpen, setIsFitCheckOpen] = useState(false);
   const [selfChecks, setSelfChecks] = useState<Record<string, boolean>>({});
 
-  const { opportunity, isLoading, isMockFallback } = useOpportunityDetail(
+  const { opportunity, isLoading, isMockFallback, source } = useOpportunityDetail(
     typeof id === 'string' ? id : undefined,
   );
   const bookmarked = opportunity ? isSaved(opportunity.id) : false;
@@ -415,6 +416,11 @@ export default function OpportunityDetailScreen() {
             </Text>
           )}
         </YCard>
+
+        {source === 'cache' ? <Text>Saved copy — check dates with the official source.</Text> : null}
+        <Text>Application status: {opportunity.applicationStatus || 'unknown'}</Text>
+        <Text>Last verified: {opportunity.lastVerifiedAt || 'not available'}</Text>
+        <ReadinessPanel opportunityId={opportunity.id} />
 
         {/* ─── Eligibility Requirements ───────────────────────────── */}
         <YCard variant="elevated" style={styles.sectionCard}>

@@ -1,3 +1,8 @@
+> **Working repository: [cmasked/vanya](https://github.com/cmasked/vanya).**
+> This full-project branch includes Person 5's voice and offline integration. The complete combined app is on
+> [integration/yogya-complete](https://github.com/cmasked/vanya/tree/integration/yogya-complete).
+> Read [the working repository guide](docs/WORKING_REPOSITORY.md) before starting.
+
 # Yogya (योग्य) — AI-Powered Opportunity Navigator
 **Citi India Hackathon Project**
 

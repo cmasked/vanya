@@ -35,7 +35,8 @@ export function normalizeOpportunity(raw: any): Opportunity {
     throw new Error('Invalid opportunity payload received from server');
   }
 
-  const rawId = String(raw.id ?? '');
+  const rawId = String(raw.id ?? '').trim();
+  if (!rawId) throw new Error('Opportunity identifier is missing');
   const rawType = raw.type ?? 'scholarship';
 
   return {
@@ -52,7 +53,10 @@ export function normalizeOpportunity(raw: any): Opportunity {
       raw.eligibilitySummary ?? raw.eligibility_summary ?? 'Check detailed eligibility requirements',
     ),
     applicationUrl: raw.applicationUrl ?? raw.application_url ?? undefined,
-    isVerified: Boolean(raw.isVerified ?? raw.is_verified ?? false),
+    isVerified: raw.isVerified === true || raw.is_verified === true,
+    lastVerifiedAt: raw.lastVerifiedAt ?? raw.last_verified_at,
+    applicationStatus: raw.applicationStatus ?? raw.application_status,
+    sourceUrls: raw.sourceUrls ?? raw.source_urls,
     lastUpdated: String(
       raw.lastUpdated ?? raw.last_updated ?? new Date().toISOString(),
     ),

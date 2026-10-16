@@ -118,6 +118,9 @@ export interface Opportunity {
   isVerified: boolean;
   /** ISO date string */
   lastUpdated: string;
+  lastVerifiedAt?: string;
+  applicationStatus?: string;
+  sourceUrls?: string[];
   /** Optional detailed fields for opportunity details screen */
   benefits?: string[];
   eligibilityCriteria?: string[];
@@ -127,7 +130,7 @@ export interface Opportunity {
 
 // ─── Backend Integration & Data Sources ────────────────────────────────────
 
-export type DataSource = 'server' | 'mock';
+export type DataSource = 'server' | 'cache' | 'mock';
 
 export interface OpportunitiesResult {
   data: Opportunity[];

@@ -98,7 +98,7 @@ const CATEGORY_META: Record<
 export default function HomeScreen() {
   const { profile } = useStudentProfile();
   const { isSaved, toggleSave } = useSavedOpportunities();
-  const { opportunities, isRefreshing, isMockFallback, refresh } = useOpportunities();
+  const { opportunities, isRefreshing, isMockFallback, source, refresh } = useOpportunities();
 
   const displayName = profile?.displayName?.trim();
   const avatarLetter = displayName ? displayName.charAt(0).toUpperCase() : 'Y';
@@ -199,8 +199,8 @@ export default function HomeScreen() {
               />
             </View>
             <Text style={isMockFallback ? styles.demoBannerText : styles.liveBannerText}>
-              {isMockFallback
-                ? 'Showing verified demonstration programs — connect backend for real-time listings'
+              {source === 'cache' ? 'Saved copy — check current dates with the official source' : isMockFallback
+                ? 'Showing demonstration programs — connect backend for real-time listings'
                 : 'Live Data — Connected to verified opportunity directory'}
             </Text>
           </View>

@@ -1,0 +1,454 @@
+diff --git a/yogya-mobile/src/types/index.ts b/yogya-mobile/src/types/index.ts
+--- a/yogya-mobile/src/types/index.ts
++++ b/yogya-mobile/src/types/index.ts
+@@ -118,6 +118,9 @@
+   isVerified: boolean;
+   /** ISO date string */
+   lastUpdated: string;
++  lastVerifiedAt?: string;
++  applicationStatus?: string;
++  sourceUrls?: string[];
+   /** Optional detailed fields for opportunity details screen */
+   benefits?: string[];
+   eligibilityCriteria?: string[];
+@@ -127,7 +130,7 @@
+ 
+ // ─── Backend Integration & Data Sources ────────────────────────────────────
+ 
++export type DataSource = 'server' | 'cache' | 'mock';
+-export type DataSource = 'server' | 'mock';
+ 
+ export interface OpportunitiesResult {
+   data: Opportunity[];
+diff --git a/yogya-mobile/src/services/opportunities.ts b/yogya-mobile/src/services/opportunities.ts
+--- a/yogya-mobile/src/services/opportunities.ts
++++ b/yogya-mobile/src/services/opportunities.ts
+@@ -35,7 +35,8 @@
+     throw new Error('Invalid opportunity payload received from server');
+   }
+ 
++  const rawId = String(raw.id ?? '').trim();
++  if (!rawId) throw new Error('Opportunity identifier is missing');
+-  const rawId = String(raw.id ?? '');
+   const rawType = raw.type ?? 'scholarship';
+ 
+   return {
+@@ -52,7 +53,10 @@
+       raw.eligibilitySummary ?? raw.eligibility_summary ?? 'Check detailed eligibility requirements',
+     ),
+     applicationUrl: raw.applicationUrl ?? raw.application_url ?? undefined,
++    isVerified: raw.isVerified === true || raw.is_verified === true,
++    lastVerifiedAt: raw.lastVerifiedAt ?? raw.last_verified_at,
++    applicationStatus: raw.applicationStatus ?? raw.application_status,
++    sourceUrls: raw.sourceUrls ?? raw.source_urls,
+-    isVerified: Boolean(raw.isVerified ?? raw.is_verified ?? false),
+     lastUpdated: String(
+       raw.lastUpdated ?? raw.last_updated ?? new Date().toISOString(),
+     ),
+diff --git a/yogya-mobile/src/hooks/useOpportunities.ts b/yogya-mobile/src/hooks/useOpportunities.ts
+--- a/yogya-mobile/src/hooks/useOpportunities.ts
++++ b/yogya-mobile/src/hooks/useOpportunities.ts
+@@ -13,7 +13,7 @@
+ 
+ import { useCallback, useEffect, useState } from 'react';
+ import { MOCK_OPPORTUNITIES } from '@/data/mock';
++import { opportunityService } from '@/services/catalog';
+-import { opportunityService } from '@/services/opportunities';
+ import type { DataSource, Opportunity } from '@/types';
+ 
+ interface UseOpportunitiesOptions {
+diff --git a/yogya-mobile/src/hooks/useOpportunityDetail.ts b/yogya-mobile/src/hooks/useOpportunityDetail.ts
+--- a/yogya-mobile/src/hooks/useOpportunityDetail.ts
++++ b/yogya-mobile/src/hooks/useOpportunityDetail.ts
+@@ -6,7 +6,7 @@
+  */
+ 
+ import { useCallback, useEffect, useState } from 'react';
++import { opportunityService } from '@/services/catalog';
+-import { opportunityService } from '@/services/opportunities';
+ import type { DataSource, Opportunity } from '@/types';
+ 
+ export function useOpportunityDetail(id?: string) {
+diff --git a/yogya-mobile/src/context/SavedContext.tsx b/yogya-mobile/src/context/SavedContext.tsx
+--- a/yogya-mobile/src/context/SavedContext.tsx
++++ b/yogya-mobile/src/context/SavedContext.tsx
+@@ -12,10 +12,13 @@
+   useContext,
+   useEffect,
+   useMemo,
++  useRef,
+   useState,
+ } from 'react';
++import {Alert} from 'react-native';
+ import { getOpportunityById } from '@/data/mock';
++import { opportunityService } from '@/services/catalog';
++import {syncBookmark} from '@/services/integration';
+-import { opportunityService } from '@/services/opportunities';
+ import { storageService } from '@/services/storage';
+ import type { Opportunity } from '@/types';
+ 
+@@ -33,13 +36,17 @@
+ export function SavedProvider({ children }: { children: React.ReactNode }) {
+   const [savedIds, setSavedIds] = useState<string[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
++  const idsRef = useRef<string[]>([]);
++  const writes = useRef<Promise<unknown>>(Promise.resolve());
+ 
+   useEffect(() => {
+     let isMounted = true;
+ 
+     async function loadSaved() {
+       try {
++        await opportunityService.hydrateCache().catch(() => {});
+         const ids = await storageService.getSavedOpportunityIds();
++        idsRef.current = ids;
+         if (isMounted) {
+           setSavedIds(ids || []);
+         }
+@@ -75,57 +82,37 @@
+     [savedIds],
+   );
+ 
++  const matches = (a: string, b: string) => a.toLowerCase() === b.toLowerCase() ||
++    a.toLowerCase() === 'demo-' + b.toLowerCase() ||
++    'demo-' + a.toLowerCase() === b.toLowerCase();
++
++  const toggleSave = useCallback((id: string): Promise<boolean> => {
++    const job = writes.current.then(async () => {
+-  const toggleSave = useCallback(
+-    async (id: string): Promise<boolean> => {
+       if (!id) return false;
++      const exists = idsRef.current.some(saved => matches(saved, id));
++      const next = exists ? idsRef.current.filter(saved => !matches(saved, id)) : [...idsRef.current, id];
++      await syncBookmark(id, !exists);
++      await storageService.saveSavedOpportunityIds(next);
++      idsRef.current = next; setSavedIds(next);
++      return !exists;
++    });
++    writes.current = job.catch(() => {});
++    return job.catch(() => {
++      Alert.alert('Could not save the change', 'Please check device storage and try again.');
++      return idsRef.current.some(saved => matches(saved, id));
++    });
++  }, []);
+-      const normalized = id.toLowerCase();
+-      let willBeSaved = false;
+-      let nextList: string[] = [];
+ 
++  const clearSaved = useCallback((): Promise<void> => {
++    const job = writes.current.then(async () => {
++      for (const id of idsRef.current) await syncBookmark(id, false);
+-      setSavedIds((prev) => {
+-        const exists = prev.some((savedId) => {
+-          const s = savedId.toLowerCase();
+-          return (
+-            s === normalized ||
+-            s === `demo-${normalized}` ||
+-            `demo-${s}` === normalized
+-          );
+-        });
+-
+-        willBeSaved = !exists;
+-        if (exists) {
+-          nextList = prev.filter((savedId) => {
+-            const s = savedId.toLowerCase();
+-            return !(
+-              s === normalized ||
+-              s === `demo-${normalized}` ||
+-              `demo-${s}` === normalized
+-            );
+-          });
+-        } else {
+-          nextList = [...prev, id];
+-        }
+-        return nextList;
+-      });
+-
+-      try {
+-        await storageService.saveSavedOpportunityIds(nextList);
+-      } catch {
+-        console.warn('SavedContext: Failed to persist bookmark updates to storage.');
+-      }
+-
+-      return willBeSaved;
+-    },
+-    [],
+-  );
+-
+-  const clearSaved = useCallback(async () => {
+-    setSavedIds([]);
+-    try {
+       await storageService.clearSavedOpportunityIds();
++      idsRef.current = []; setSavedIds([]);
++    });
++    writes.current = job.catch(() => {});
++    return job.catch(() => {
++      Alert.alert('Could not clear saved items', 'Please check device storage and try again.');
++    });
+-    } catch {
+-      console.warn('SavedContext: Failed to clear saved bookmarks from storage.');
+-    }
+   }, []);
+ 
+   const savedOpportunities = useMemo(() => {
+diff --git a/yogya-mobile/src/context/ProfileContext.tsx b/yogya-mobile/src/context/ProfileContext.tsx
+--- a/yogya-mobile/src/context/ProfileContext.tsx
++++ b/yogya-mobile/src/context/ProfileContext.tsx
+@@ -18,6 +18,7 @@
+ } from 'react';
+ import type { OnboardingFormData, StudentProfile } from '@/types';
+ import { storageService } from '@/services/storage';
++import {syncProfile, disconnect} from '@/services/integration';
+ 
+ export const INITIAL_ONBOARDING_FORM: OnboardingFormData = {
+   displayName: '',
+@@ -109,6 +110,7 @@
+       };
+ 
+       await storageService.saveProfile(newProfile);
++      await syncProfile(newProfile);
+       setProfile(newProfile);
+       return newProfile;
+     },
+@@ -116,6 +118,7 @@
+   );
+ 
+   const clearProfile = useCallback(async () => {
++    await disconnect();
+     await storageService.clearProfile();
+     setProfile(null);
+     setDraftForm(INITIAL_ONBOARDING_FORM);
+diff --git a/yogya-mobile/src/services/storage.ts b/yogya-mobile/src/services/storage.ts
+--- a/yogya-mobile/src/services/storage.ts
++++ b/yogya-mobile/src/services/storage.ts
+@@ -33,13 +33,9 @@
+ let writeQueue: Promise<void> = Promise.resolve();
+ 
+ function enqueueWrite(operation: () => Promise<void>): Promise<void> {
++  const next = writeQueue.then(operation);
++  writeQueue = next.catch(() => {});
++  return next; // Report a failed durable write to the caller.
+-  writeQueue = writeQueue
+-    .then(operation)
+-    .catch((err) => {
+-      // Log generic operational message without private data
+-      console.warn('YogyaStorage: Persistent storage write failed:', err?.message || 'Unknown error');
+-    });
+-  return writeQueue;
+ }
+ 
+ /**
+@@ -80,7 +76,6 @@
+    * Save the completed student profile
+    */
+   async saveProfile(profile: StudentProfile): Promise<void> {
+-    memoryProfileCache = profile;
+ 
+     await enqueueWrite(async () => {
+       const serialized = JSON.stringify(profile);
+@@ -95,6 +90,7 @@
+         }
+       }
+     });
++    memoryProfileCache = profile;
+   },
+ 
+   /**
+@@ -134,7 +130,6 @@
+    * Clear or reset the student profile
+    */
+   async clearProfile(): Promise<void> {
+-    memoryProfileCache = null;
+ 
+     await enqueueWrite(async () => {
+       await AsyncStorage.removeItem(PROFILE_STORAGE_KEY);
+@@ -147,13 +142,13 @@
+         }
+       }
+     });
++    memoryProfileCache = null;
+   },
+ 
+   /**
+    * Save array of bookmarked opportunity IDs
+    */
+   async saveSavedOpportunityIds(ids: string[]): Promise<void> {
+-    memorySavedCache = [...ids];
+ 
+     await enqueueWrite(async () => {
+       const serialized = JSON.stringify(ids);
+@@ -167,6 +162,7 @@
+         }
+       }
+     });
++    memorySavedCache = [...ids];
+   },
+ 
+   /**
+@@ -205,7 +201,6 @@
+    * Clear all saved opportunity bookmarks
+    */
+   async clearSavedOpportunityIds(): Promise<void> {
+-    memorySavedCache = [];
+ 
+     await enqueueWrite(async () => {
+       await AsyncStorage.removeItem(SAVED_OPPORTUNITIES_STORAGE_KEY);
+@@ -218,5 +213,6 @@
+         }
+       }
+     });
++    memorySavedCache = [];
+   },
+ };
+diff --git a/yogya-mobile/src/app/_layout.tsx b/yogya-mobile/src/app/_layout.tsx
+--- a/yogya-mobile/src/app/_layout.tsx
++++ b/yogya-mobile/src/app/_layout.tsx
+@@ -13,6 +13,7 @@
+ import { StatusBar } from 'expo-status-bar';
+ import React, { useEffect, useRef } from 'react';
+ 
++import {SyncBridge} from '@/components/SyncBridge';
+ import { Colors } from '@/constants/theme';
+ import { ProfileProvider, useStudentProfile } from '@/context/ProfileContext';
+ import { SavedProvider, useSavedOpportunities } from '@/context/SavedContext';
+@@ -58,6 +59,7 @@
+   return (
+     <>
+       <StatusBar style="dark" />
++      <SyncBridge />
+       <Stack
+         screenOptions={{
+           headerShown: false,
+@@ -67,6 +69,7 @@
+       >
+         <Stack.Screen name="index" />
+         <Stack.Screen name="onboarding" />
++        <Stack.Screen name="voice-sync" />
+         <Stack.Screen name="(tabs)" />
+         <Stack.Screen name="opportunity/[id]" />
+       </Stack>
+diff --git a/yogya-mobile/src/app/(tabs)/home.tsx b/yogya-mobile/src/app/(tabs)/home.tsx
+--- a/yogya-mobile/src/app/(tabs)/home.tsx
++++ b/yogya-mobile/src/app/(tabs)/home.tsx
+@@ -98,7 +98,7 @@
+ export default function HomeScreen() {
+   const { profile } = useStudentProfile();
+   const { isSaved, toggleSave } = useSavedOpportunities();
++  const { opportunities, isRefreshing, isMockFallback, source, refresh } = useOpportunities();
+-  const { opportunities, isRefreshing, isMockFallback, refresh } = useOpportunities();
+ 
+   const displayName = profile?.displayName?.trim();
+   const avatarLetter = displayName ? displayName.charAt(0).toUpperCase() : 'Y';
+@@ -199,8 +199,8 @@
+               />
+             </View>
+             <Text style={isMockFallback ? styles.demoBannerText : styles.liveBannerText}>
++              {source === 'cache' ? 'Saved copy — check current dates with the official source' : isMockFallback
++                ? 'Showing demonstration programs — connect backend for real-time listings'
+-              {isMockFallback
+-                ? 'Showing verified demonstration programs — connect backend for real-time listings'
+                 : 'Live Data — Connected to verified opportunity directory'}
+             </Text>
+           </View>
+diff --git a/yogya-mobile/src/app/opportunity/[id].tsx b/yogya-mobile/src/app/opportunity/[id].tsx
+--- a/yogya-mobile/src/app/opportunity/[id].tsx
++++ b/yogya-mobile/src/app/opportunity/[id].tsx
+@@ -11,6 +11,7 @@
+  */
+ 
+ import { router, useLocalSearchParams } from 'expo-router';
++import {ReadinessPanel} from '@/components/ReadinessPanel';
+ import React, { useState } from 'react';
+ import {
+   ActivityIndicator,
+@@ -82,7 +83,7 @@
+   const [isFitCheckOpen, setIsFitCheckOpen] = useState(false);
+   const [selfChecks, setSelfChecks] = useState<Record<string, boolean>>({});
+ 
++  const { opportunity, isLoading, isMockFallback, source } = useOpportunityDetail(
+-  const { opportunity, isLoading, isMockFallback } = useOpportunityDetail(
+     typeof id === 'string' ? id : undefined,
+   );
+   const bookmarked = opportunity ? isSaved(opportunity.id) : false;
+@@ -416,6 +417,11 @@
+           )}
+         </YCard>
+ 
++        {source === 'cache' ? <Text>Saved copy — check dates with the official source.</Text> : null}
++        <Text>Application status: {opportunity.applicationStatus || 'unknown'}</Text>
++        <Text>Last verified: {opportunity.lastVerifiedAt || 'not available'}</Text>
++        <ReadinessPanel opportunityId={opportunity.id} />
++
+         {/* ─── Eligibility Requirements ───────────────────────────── */}
+         <YCard variant="elevated" style={styles.sectionCard}>
+           <Text style={styles.sectionHeading}>Eligibility Requirements</Text>
+diff --git a/yogya-mobile/src/app/(tabs)/profile.tsx b/yogya-mobile/src/app/(tabs)/profile.tsx
+--- a/yogya-mobile/src/app/(tabs)/profile.tsx
++++ b/yogya-mobile/src/app/(tabs)/profile.tsx
+@@ -8,6 +8,7 @@
+  * - Privacy protection notice guaranteeing no sensitive identity/bank data stored
+  */
+ 
++import {integrationStrings} from '@/constants/integrationStrings';
+ import { router } from 'expo-router';
+ import React, { useState } from 'react';
+ import {
+@@ -123,6 +124,11 @@
+                 </View>
+ 
+                 <YButton
++                  title={integrationStrings[profile?.preferredLanguage === 'Tamil' ? 'ta' : 'en'].settings}
++                  onPress={() => router.push('/voice-sync')}
++                  fullWidth
++                />
++                <YButton
+                   title="Edit Profile Details"
+                   variant="outline"
+                   size="md"
+diff --git a/yogya-mobile/app.json b/yogya-mobile/app.json
+--- a/yogya-mobile/app.json
++++ b/yogya-mobile/app.json
+@@ -33,6 +33,14 @@
+           "image": "./assets/images/splash-icon.png",
+           "imageWidth": 76
+         }
++      ],
++      [
++        "expo-audio",
++        {
++          "microphonePermission": "Allow Yogya to record an answer when you tap Record.",
++          "enableBackgroundRecording": false,
++          "enableBackgroundPlayback": false
++        }
+       ]
+     ],
+     "experiments": {
+diff --git a/yogya-mobile/package.json b/yogya-mobile/package.json
+--- a/yogya-mobile/package.json
++++ b/yogya-mobile/package.json
+@@ -27,7 +27,13 @@
+     "react-native-screens": "~4.26.0",
+     "react-native-svg": "15.15.4",
+     "react-native-web": "~0.21.0",
++    "react-native-worklets": "0.10.1",
++    "expo-audio": "~57.0.5",
++    "expo-crypto": "~57.0.4",
++    "expo-file-system": "~57.0.7",
++    "expo-network": "~57.0.2",
++    "expo-secure-store": "~57.0.4",
++    "expo-speech": "~57.0.3"
+-    "react-native-worklets": "0.10.1"
+   },
+   "devDependencies": {
+     "@types/react": "~19.2.2",
+@@ -39,7 +45,9 @@
+     "android": "expo start --android",
+     "ios": "expo start --ios",
+     "web": "expo start --web",
++    "lint": "expo lint",
++    "typecheck": "tsc --noEmit",
++    "test:offline": "node tests/offline.test.mjs"
+-    "lint": "expo lint"
+   },
+   "private": true
+ }

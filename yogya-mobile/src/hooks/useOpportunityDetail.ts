@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { opportunityService } from '@/services/opportunities';
+import { opportunityService } from '@/services/catalog';
 import type { DataSource, Opportunity } from '@/types';
 
 export function useOpportunityDetail(id?: string) {
