@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: yogya
+      POSTGRES_USER: yogya
+      POSTGRES_PASSWORD: yogya
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["yogya_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yogya -d yogya"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  api:
+    build:
+      context: ..
+      dockerfile: yogya-backend/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://yogya:yogya@db:5432/yogya
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  yogya_pg:
