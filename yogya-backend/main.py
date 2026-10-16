@@ -171,7 +171,8 @@ def create_app(database_url=None):
             raise
         except Exception:
             raise HTTPException(503, "Eligibility service is unavailable or returned an invalid result")
-        return {**result, "student_id": body.student_id, "opportunity_id": body.opportunity_id}
+        return {**result, "student_id": body.student_id, "opportunity_id": body.opportunity_id,
+                "profile_version": profile["version"]}
 
     @app.post("/api/v1/students/{student_id}/saved-opportunities")
     def save(student_id: str, body: SaveRequest, request: Request, db: DB,

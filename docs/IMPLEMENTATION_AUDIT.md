@@ -26,6 +26,9 @@ GitHub Actions because the local execution workspace is unavailable.
 9. Account switches during queued UI writes could send old screen state to the newly active account.
    Mutations capture the storage identity and fail when it changes.
 
+10. Eligibility could be checked against an older server profile while local edits were pending.
+    Checks now require those edits to sync, and cached results identify a changed profile using server versions.
+
 ## Completion by role
 | Role | Present | Still needed |
 |---|---|---|

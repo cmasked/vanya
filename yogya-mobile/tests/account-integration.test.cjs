@@ -118,6 +118,7 @@ async function run() {
   assert.equal((await ui.getProfile()).displayName, 'Offline A');
   assert.equal((await api.getStatus()).state.queue.length, 1);
   assert.equal(profiles['student-a'].display_name, 'Student A');
+  await assert.rejects(api.eligibility('opp-a'), error => error.status === 409);
   online = true;
   await api.connect('b');
   assert.equal((await ui.getProfile()).displayName, 'Student B');

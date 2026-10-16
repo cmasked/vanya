@@ -44,6 +44,7 @@ export function ReadinessPanel({opportunityId}: {opportunityId: string}) {
     })} />
     {result ? <View>
       <Text>{result.cached ? t.cached : ''} {new Date(result.fetchedAt).toLocaleString()}</Text>
+      {result.profileChanged ? <Text>Your profile has changed. Sync it and check eligibility again.</Text> : null}
       <Text>{result.value.status}</Text>
       {(result.value.criteria || []).map((criterion: Record<string, string>) =>
         <Text key={criterion.criterion_id}>{criterion.status}: {criterion.explanation}</Text>)}

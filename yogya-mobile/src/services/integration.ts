@@ -288,15 +288,21 @@ export async function eligibility(opportunityId: string) {
   const {account, store} = await current();
   const key = 'eligibility:' + opportunityId;
   try {
+    if (!account.student_id) throw new ApiError('Sync your profile first.', '/eligibility/check', 409);
+    if ((await store.snapshot()).queue.some(op => op.entity === 'profile:' + account.student_id)) {
+      await flush();
+      if ((await store.snapshot()).queue.some(op => op.entity === 'profile:' + account.student_id))
+        throw new ApiError('Sync or resolve pending profile changes before checking eligibility.', '/eligibility/check', 409);
+    }
     const value = await requestFor(account, '/eligibility/check', {method: 'POST',
       body: JSON.stringify({student_id: account.student_id, opportunity_id: opportunityId})});
     await store.cache(key, value);
-    return {value, cached: false, fetchedAt: Date.now()};
+    return {value, cached: false, fetchedAt: Date.now(), profileChanged: false};
   } catch (error) {
-    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) throw error;
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 409)) throw error;
     const old = (await store.snapshot()).records[key];
     if (!old) throw error;
-    return {value: old.value, cached: true, fetchedAt: old.fetchedAt};
+    return readEligibility(opportunityId);
   }
 }
 export function startSync() {
@@ -335,9 +341,14 @@ export async function uploadAudio(uri: string, language: string, signal: AbortSi
 }
 
 export async function readEligibility(opportunityId: string) {
-  const {store} = await current();
-  const record = (await store.snapshot()).records['eligibility:' + opportunityId];
-  return record ? {value: record.value, cached: true, fetchedAt: record.fetchedAt} : null;
+  const {account, store} = await current();
+  const state = await store.snapshot();
+  const record = state.records['eligibility:' + opportunityId];
+  const profileKey = 'profile:' + account.student_id;
+  return record ? {value: record.value, cached: true, fetchedAt: record.fetchedAt,
+    profileChanged: !record.value.profile_version ||
+      record.value.profile_version !== state.records[profileKey]?.version ||
+      state.queue.some(op => op.entity === profileKey)} : null;
 }
 
 export async function syncBookmark(opportunityId: string, saved: boolean) {

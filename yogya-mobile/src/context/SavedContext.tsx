@@ -111,6 +111,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearSaved = useCallback((): Promise<void> => {
+    const scope = storageService.getScope();
     const job = writes.current.then(async () => {
       for (const id of idsRef.current) {
         if (storageService.getScope() !== scope) throw new Error('Account changed.');

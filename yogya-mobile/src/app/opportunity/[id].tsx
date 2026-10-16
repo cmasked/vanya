@@ -400,10 +400,10 @@ export default function OpportunityDetailScreen() {
           </View>
           <View style={styles.buttonHalf}>
             <YButton
-              title={isFitCheckOpen ? 'Hide Fit Check' : 'Check My Fit'}
+              title={bookmarked ? 'Remove Bookmark' : 'Save Opportunity'}
               variant="primary"
               size="md"
-              onPress={() => setIsFitCheckOpen((prev) => !prev)}
+              onPress={() => {void toggleSave(opportunity.id);}}
               fullWidth
             />
           </View>

@@ -166,6 +166,7 @@ def test_engine_receives_canonical_fields_and_rejects_invented_criteria(setup):
     body = {"student_id": sid, "opportunity_id": oid}
     valid = c.post("/api/v1/eligibility/check", headers=headers(token), json=body)
     assert valid.status_code == 200
+    assert valid.json()["profile_version"] == 2
     assert all(x["source_reference"].startswith("https://") for x in valid.json()["criteria"])
     def invented(profile, official):
         value = engine(profile, official)
