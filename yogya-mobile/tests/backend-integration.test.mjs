@@ -64,6 +64,14 @@ assert.equal((await queue.snapshot()).queue.length, 0);
 await assert.rejects(api(path, {credential: stranger}), e => e.status === 404);
 await assert.rejects(api(path, {method: 'PATCH', credential: stranger, key: randomUUID(),
   body: {completed: true, expected_version: 4}}), e => e.status === 404);
-await assert.rejects(api('/eligibility/check', {method: 'POST',
-  body: {student_id: profile.id, opportunity_id: catalog.items[0].id}}), e => e.status === 503);
+const eligibility = await api('/eligibility/check', {method: 'POST',
+  body: {student_id: profile.id, opportunity_id: catalog.items[0].id}});
+assert.equal(eligibility.status, 'POTENTIAL_MATCH_NEEDS_INFO');
+assert.equal(eligibility.student_id, profile.id);
+assert.equal(eligibility.opportunity_id, catalog.items[0].id);
+assert.ok(eligibility.criteria.length > 0);
+assert.ok(eligibility.criteria.every(item =>
+  ['SATISFIED', 'NOT_SATISFIED', 'UNKNOWN', 'REQUIRES_VERIFICATION'].includes(item.status)));
+assert.ok(eligibility.explanation.summary);
+assert.ok(eligibility.checklist.length > 0);
 console.log('Core/backend integration passed: restart, offline replay, lost response, idempotency, conflict and authorization.');
