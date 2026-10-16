@@ -16,6 +16,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import {Alert} from 'react-native';
 import type { OnboardingFormData, StudentProfile } from '@/types';
 import { storageService } from '@/services/storage';
 import {syncProfile, disconnect} from '@/services/integration';
@@ -55,12 +56,17 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let generation = 0, initialized = false;
 
     async function loadStoredProfile() {
+      const ticket = ++generation;
       try {
         const stored = await storageService.getProfile();
-        if (isMounted && stored) {
+        if (isMounted && ticket === generation) {
           setProfile(stored);
+        }
+        if (isMounted && ticket === generation && stored && !initialized) {
+          initialized = true;
           setDraftForm({
             displayName: stored.displayName,
             preferredLanguage: stored.preferredLanguage,
@@ -75,7 +81,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           });
         }
       } catch {
-        console.warn('ProfileContext: Failed to initialize student profile from storage.');
+        if (isMounted) Alert.alert('Could not load this profile', 'Saved data has been preserved. Reconnect or retry after checking device storage.');
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -83,10 +89,12 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    loadStoredProfile();
+    void loadStoredProfile();
+    const unsubscribe = storageService.subscribe(() => {void loadStoredProfile();});
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, []);
 
@@ -109,9 +117,14 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         completedAt: new Date().toISOString(),
       };
 
+      const scope = storageService.getScope();
       await storageService.saveProfile(newProfile);
-      await syncProfile(newProfile);
+      if (storageService.getScope() !== scope) throw new Error('Account changed. Reopen your profile.');
       setProfile(newProfile);
+      try { await syncProfile(newProfile); }
+      catch {
+        Alert.alert('Profile saved on this device', 'Server sync could not finish. Reconnect and use Sync profile in Voice & sync.');
+      }
       return newProfile;
     },
     [profile?.id],

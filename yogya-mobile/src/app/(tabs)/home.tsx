@@ -201,7 +201,7 @@ export default function HomeScreen() {
             <Text style={isMockFallback ? styles.demoBannerText : styles.liveBannerText}>
               {source === 'cache' ? 'Saved copy — check current dates with the official source' : isMockFallback
                 ? 'Showing demonstration programs — connect backend for real-time listings'
-                : 'Live Data — Connected to verified opportunity directory'}
+                : 'Curated directory — check source dates and current availability'}
             </Text>
           </View>
 
@@ -402,7 +402,7 @@ export default function HomeScreen() {
             <View style={styles.opportunitiesList}>
               {filteredOpportunities.map((opp) => {
                 const meta = CATEGORY_META[opp.type] || CATEGORY_META.scholarship;
-                const deadlineText = opp.deadline || 'Open / Ongoing';
+                const deadlineText = opp.deadline || 'Deadline not confirmed';
                 const bookmarked = isSaved(opp.id);
 
                 const handleNavigate = () => {

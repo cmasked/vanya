@@ -166,7 +166,7 @@ def create_app(database_url=None):
         profile = service.student(db, actor, body.student_id, write=True)
         official = service.opportunity(db, body.opportunity_id)
         try:
-            result = service.validate_eligibility(app.state.eligibility(profile["profile"], official), official)
+            result = service.validate_eligibility(app.state.eligibility(service.engine_profile(profile["profile"]), official), official)
         except HTTPException:
             raise
         except Exception:
@@ -181,6 +181,8 @@ def create_app(database_url=None):
             official = service.opportunity(db, body.opportunity_id)
             saved_id = str(uuid5(NAMESPACE_URL, student_id + ":" + body.opportunity_id))
             existing = db.execute("SELECT * FROM yogya_saved WHERE id=%s FOR UPDATE", (saved_id,)).fetchone()
+            if existing and body.expected_version is None and existing["saved"] != body.saved:
+                raise HTTPException(409, "A version is required to change an existing saved opportunity")
             if body.expected_version is not None and body.expected_version != (existing["version"] if existing else 0):
                 raise HTTPException(409, "Saved opportunity changed; review the server version")
             row = db.execute(

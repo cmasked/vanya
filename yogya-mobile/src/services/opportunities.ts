@@ -15,7 +15,7 @@
 
 import { getOpportunityById, MOCK_OPPORTUNITIES } from '@/data/mock';
 import type { OpportunitiesResult, Opportunity, OpportunityDetailResult } from '@/types';
-import { apiFetch, BACKEND_ENDPOINTS, isBackendConfigured } from './api';
+import { ApiError, apiFetch, BACKEND_ENDPOINTS, isBackendConfigured } from './api';
 
 // In-memory opportunity registry: pre-populated with mock opportunities,
 // updated whenever server data is fetched so IDs resolve reliably across tabs.
@@ -52,13 +52,15 @@ export function normalizeOpportunity(raw: any): Opportunity {
     eligibilitySummary: String(
       raw.eligibilitySummary ?? raw.eligibility_summary ?? 'Check detailed eligibility requirements',
     ),
-    applicationUrl: raw.applicationUrl ?? raw.application_url ?? undefined,
+    applicationUrl: /^https:\/\//i.test(String(raw.applicationUrl ?? raw.application_url ?? ''))
+      ? String(raw.applicationUrl ?? raw.application_url) : undefined,
     isVerified: raw.isVerified === true || raw.is_verified === true,
     lastVerifiedAt: raw.lastVerifiedAt ?? raw.last_verified_at,
     applicationStatus: raw.applicationStatus ?? raw.application_status,
-    sourceUrls: raw.sourceUrls ?? raw.source_urls,
+    sourceUrls: Array.isArray(raw.sourceUrls ?? raw.source_urls)
+      ? (raw.sourceUrls ?? raw.source_urls).filter((url: unknown) => typeof url === 'string' && /^https:\/\//i.test(url)) : [],
     lastUpdated: String(
-      raw.lastUpdated ?? raw.last_updated ?? new Date().toISOString(),
+      raw.lastUpdated ?? raw.last_updated ?? '',
     ),
     benefits: Array.isArray(raw.benefits)
       ? raw.benefits.map(String)
@@ -182,9 +184,12 @@ export const opportunityService = {
           `Reason: ${err?.message || 'Network error'}`,
       );
 
-      const fallbackOpp = opportunityCache.get(id.toLowerCase()) || getOpportunityById(id);
+      const status = err instanceof ApiError ? err.status : undefined;
+      const fallbackOpp = status && status >= 400 && status < 500 ? undefined
+        : opportunityCache.get(id.toLowerCase()) || getOpportunityById(id);
       return {
         data: fallbackOpp ?? null,
+        errorStatus: status,
         source: 'mock',
         isMockFallback: true,
         error: err?.message || 'Server unavailable',

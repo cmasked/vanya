@@ -80,8 +80,8 @@ const PATHWAYS: PathwayInfo[] = [
     ),
     description:
       'Certified hands-on training courses under PMKVY and Sector Skill Councils for rural & urban job readiness.',
-    whoIsItFor: 'Youth aged 15-45, 10th pass candidates, and school or college leavers.',
-    keyBenefit: 'Government certification, monthly stipend, and verified placement assistance.',
+    whoIsItFor: 'Entry requirements vary by programme and trade.',
+    keyBenefit: 'Training, certification or placement support where the programme explicitly provides it.',
   },
   {
     type: 'scheme',
@@ -112,7 +112,7 @@ const PATHWAYS: PathwayInfo[] = [
 export default function ExploreScreen() {
   const [selectedType, setSelectedType] = useState<OpportunityType>('scholarship');
   const { isSaved, toggleSave } = useSavedOpportunities();
-  const { opportunities, isRefreshing, refresh } = useOpportunities();
+  const { opportunities, isRefreshing, source, refresh } = useOpportunities();
 
   const currentPathway =
     PATHWAYS.find((p) => p.type === selectedType) || PATHWAYS[0];
@@ -141,9 +141,13 @@ export default function ExploreScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Explore Pathways</Text>
             <Text style={styles.headerSubtitle}>
-              Discover verified opportunities organized by educational and career roadmaps.
+              Explore opportunity categories. Requirements and benefits vary by programme.
             </Text>
           </View>
+
+          <Text style={styles.headerSubtitle}>{source === 'mock'
+            ? 'Demonstration records — examples only'
+            : source === 'cache' ? 'Saved copy — check official dates' : 'Curated directory — check official sources'}</Text>
 
           {/* ─── Pathway Selector Cards (Horizontal) ─────────── */}
           <ScrollView
@@ -261,7 +265,7 @@ export default function ExploreScreen() {
             <View style={styles.opportunitiesList}>
               {pathwayOpportunities.map((opp) => {
                 const bookmarked = isSaved(opp.id);
-                const deadlineText = opp.deadline || 'Open / Ongoing';
+                const deadlineText = opp.deadline || 'Deadline not confirmed';
 
                 const handleNavigate = () => {
                   router.push({

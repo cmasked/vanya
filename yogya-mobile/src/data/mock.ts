@@ -138,7 +138,7 @@ export const MOCK_OPPORTUNITIES: Opportunity[] = [
     amount: 'Stipend ₹7,000 - ₹10,000/month',
     eligibilitySummary: 'Age 14+, Class 10/12/ITI pass, Indian citizen',
     applicationUrl: 'https://www.apprenticeshipindia.gov.in/',
-    isVerified: true,
+    isVerified: false,
     lastUpdated: '2026-10-16T00:00:00Z',
     benefits: [
       'Monthly stipend of ₹7,000 to ₹10,000/month with direct DBT government co-funding',

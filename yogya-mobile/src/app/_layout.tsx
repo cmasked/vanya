@@ -11,8 +11,11 @@ import { requireOptionalNativeModule } from 'expo';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
+import {storageService} from '@/services/storage';
+import {restore} from '@/services/integration';
+import {ActivityIndicator, Button, Text, View} from 'react-native';
 import {SyncBridge} from '@/components/SyncBridge';
 import { Colors } from '@/constants/theme';
 import { ProfileProvider, useStudentProfile } from '@/context/ProfileContext';
@@ -78,8 +81,24 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [scope, setScope] = useState(storageService.getScope());
+  const [ready, setReady] = useState(false), [error, setError] = useState('');
+  const initialize = async () => {
+    setError('');
+    try {await restore(); setReady(true);}
+    catch {void SplashScreen.hideAsync(); setError('Could not restore this account. Saved data has been preserved.');}
+  };
+  useEffect(() => {
+    const unsubscribe = storageService.subscribe(() => setScope(storageService.getScope()));
+    void initialize();
+    return unsubscribe;
+  }, []);
+  if (!ready) return <View style={{flex: 1, justifyContent: 'center', padding: 24}}>
+    {error ? <><Text>{error}</Text><Button title="Retry" onPress={() => void initialize()} /></>
+      : <ActivityIndicator />}
+  </View>;
   return (
-    <ProfileProvider>
+    <ProfileProvider key={scope}>
       <SavedProvider>
         <RootNavigator />
       </SavedProvider>

@@ -10,6 +10,7 @@ git clone https://github.com/cmasked/vanya.git
 cd vanya
 ```
 
+- [Implementation audit and remaining work](docs/IMPLEMENTATION_AUDIT.md)
 - [Repository and branch guide](docs/WORKING_REPOSITORY.md)
 - [Backend setup, database migrations and API](yogya-backend/README.md)
 - [Mobile setup](yogya-mobile/README.md)

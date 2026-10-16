@@ -12,7 +12,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import {ReadinessPanel} from '@/components/ReadinessPanel';
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -46,7 +46,6 @@ import {
 } from '@/constants/theme';
 import { useOpportunityDetail } from '@/hooks/useOpportunityDetail';
 import { useSavedOpportunities } from '@/hooks/useSavedOpportunities';
-import { useStudentProfile } from '@/hooks/useStudentProfile';
 import type { OpportunityType } from '@/types';
 
 const CATEGORY_META: Record<
@@ -77,11 +76,8 @@ const CATEGORY_META: Record<
 
 export default function OpportunityDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { profile } = useStudentProfile();
   const { isSaved, toggleSave } = useSavedOpportunities();
 
-  const [isFitCheckOpen, setIsFitCheckOpen] = useState(false);
-  const [selfChecks, setSelfChecks] = useState<Record<string, boolean>>({});
 
   const { opportunity, isLoading, isMockFallback, source } = useOpportunityDetail(
     typeof id === 'string' ? id : undefined,
@@ -153,12 +149,9 @@ export default function OpportunityDetailScreen() {
 
   const category = CATEGORY_META[opportunity.type] || CATEGORY_META.scholarship;
 
-  const toggleSelfCheck = (key: string) => {
-    setSelfChecks((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   const handleOpenLink = () => {
-    if (opportunity.applicationUrl) {
+    if (opportunity.applicationUrl && /^https:\/\//i.test(opportunity.applicationUrl)) {
       Linking.openURL(opportunity.applicationUrl).catch((err) =>
         console.warn('Failed to open URL', err),
       );
@@ -231,13 +224,14 @@ export default function OpportunityDetailScreen() {
               color={isMockFallback ? Palette.ochreDark : Palette.forestGreenDark}
             />
             <Text style={isMockFallback ? styles.demoBannerTitle : styles.liveBannerTitle}>
-              {isMockFallback ? 'Demonstration Program' : 'Verified Opportunity'}
+              {isMockFallback ? 'Demonstration Program' : source === 'cache' ? 'Saved Opportunity' : 'Curated Opportunity'}
             </Text>
           </View>
           <Text style={isMockFallback ? styles.demoBannerText : styles.liveBannerText}>
             {isMockFallback
-              ? 'This entry is demonstration data for testing the Yogya navigator. Official opportunities are synchronized and verified by certified partners.'
-              : 'This opportunity was retrieved directly from the verified opportunity directory.'}
+              ? 'This is sample data for testing. It does not establish eligibility or current availability.'
+              : source === 'cache' ? 'This is a saved copy. Check the official source for current rules and dates.'
+              : 'This entry comes from the curated directory. Review the source and verification date below.'}
           </Text>
         </View>
 
@@ -262,132 +256,11 @@ export default function OpportunityDetailScreen() {
               <View style={styles.metricDeadlineRow}>
                 <CalendarIcon size={14} color={Palette.charcoal} />
                 <Text style={styles.metricValue}>
-                  {opportunity.deadline || 'Open / Ongoing'}
+                  {opportunity.deadline || 'Deadline not confirmed'}
                 </Text>
               </View>
             </View>
           </View>
-        </YCard>
-
-        {/* ─── "Check My Fit" Card ─────────────────────────────────── */}
-        <YCard variant="elevated" style={styles.fitCard}>
-          <View style={styles.fitHeaderRow}>
-            <View style={styles.fitIconCircle}>
-              <SparkleIcon size={18} color={Palette.sageDark} />
-            </View>
-            <View style={styles.fitHeaderText}>
-              <Text style={styles.fitTitle}>Check My Fit</Text>
-              <Text style={styles.fitSubtitle}>
-                Compare your student profile with this opportunity's criteria
-              </Text>
-            </View>
-          </View>
-
-          {!isFitCheckOpen ? (
-            <YButton
-              title="Check Eligibility & Fit"
-              variant="primary"
-              size="md"
-              fullWidth
-              onPress={() => setIsFitCheckOpen(true)}
-            />
-          ) : (
-            <View style={styles.fitContentBox}>
-              <View style={styles.fitDisclaimerBox}>
-                <Text style={styles.fitDisclaimerText}>
-                  <Text style={styles.boldText}>Preliminary Self-Check: </Text>
-                  This guidance is based strictly on your entered profile and demo criteria. Official
-                  verification is conducted by the issuing authority upon formal application submission.
-                </Text>
-              </View>
-
-              {/* Profile comparison points */}
-              <View style={styles.checklist}>
-                {/* 1. Education Match */}
-                <View style={styles.checkItem}>
-                  <View style={styles.checkIconBullet}>
-                    <CheckIcon
-                      size={14}
-                      color={profile?.educationLevel ? Palette.forestGreen : Palette.warmGray}
-                    />
-                  </View>
-                  <View style={styles.checkItemText}>
-                    <Text style={styles.checkItemTitle}>Education Level</Text>
-                    <Text style={styles.checkItemDesc}>
-                      {profile?.educationLevel
-                        ? `Your Profile: ${profile.educationLevel} (Criteria: ${opportunity.eligibilitySummary.split(',')[0] || 'See requirements'})`
-                        : 'Complete your profile to auto-verify your class/degree'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 2. State & Location */}
-                <View style={styles.checkItem}>
-                  <View style={styles.checkIconBullet}>
-                    <CheckIcon
-                      size={14}
-                      color={profile?.state ? Palette.forestGreen : Palette.warmGray}
-                    />
-                  </View>
-                  <View style={styles.checkItemText}>
-                    <Text style={styles.checkItemTitle}>State / Geographic Scope</Text>
-                    <Text style={styles.checkItemDesc}>
-                      {profile?.state
-                        ? `Your Profile: ${profile.state} (Open across India / participating states)`
-                        : 'Self-check: Applicable for residents of India'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 3. Self-report Criteria Toggle */}
-                <Pressable
-                  onPress={() => toggleSelfCheck('academic')}
-                  style={styles.interactiveCheckRow}
-                >
-                  <View
-                    style={[
-                      styles.checkboxBox,
-                      selfChecks.academic && styles.checkboxBoxActive,
-                    ]}
-                  >
-                    {selfChecks.academic && (
-                      <CheckIcon size={12} color={Palette.softWhite} strokeWidth={3} />
-                    )}
-                  </View>
-                  <Text style={styles.interactiveCheckLabel}>
-                    I meet the minimum marks or qualification requirement
-                  </Text>
-                </Pressable>
-
-                {/* 4. Documents Criteria Toggle */}
-                <Pressable
-                  onPress={() => toggleSelfCheck('documents')}
-                  style={styles.interactiveCheckRow}
-                >
-                  <View
-                    style={[
-                      styles.checkboxBox,
-                      selfChecks.documents && styles.checkboxBoxActive,
-                    ]}
-                  >
-                    {selfChecks.documents && (
-                      <CheckIcon size={12} color={Palette.softWhite} strokeWidth={3} />
-                    )}
-                  </View>
-                  <Text style={styles.interactiveCheckLabel}>
-                    I have access to required identity / educational certificates
-                  </Text>
-                </Pressable>
-              </View>
-
-              <YButton
-                title="Hide Eligibility Checklist"
-                variant="ghost"
-                size="sm"
-                onPress={() => setIsFitCheckOpen(false)}
-              />
-            </View>
-          )}
         </YCard>
 
         {/* ─── Description Section ─────────────────────────────────── */}
@@ -420,7 +293,12 @@ export default function OpportunityDetailScreen() {
         {source === 'cache' ? <Text>Saved copy — check dates with the official source.</Text> : null}
         <Text>Application status: {opportunity.applicationStatus || 'unknown'}</Text>
         <Text>Last verified: {opportunity.lastVerifiedAt || 'not available'}</Text>
-        <ReadinessPanel opportunityId={opportunity.id} />
+        {isMockFallback ? <Text>Eligibility checks and server checklists are available for catalog records.</Text>
+          : <ReadinessPanel opportunityId={opportunity.id} />}
+        {(opportunity.sourceUrls || []).filter(url => /^https:\/\//i.test(url)).map(url =>
+          <Pressable key={url} accessibilityRole="link" onPress={() => {void Linking.openURL(url).catch(() => {});}}>
+            <Text style={styles.paragraph}>{url}</Text>
+          </Pressable>)}
 
         {/* ─── Eligibility Requirements ───────────────────────────── */}
         <YCard variant="elevated" style={styles.sectionCard}>

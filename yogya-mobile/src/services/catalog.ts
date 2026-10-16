@@ -23,10 +23,10 @@ async function save(items: Opportunity[], query?: string) {
     const fetchedAt = new Date().toISOString();
     for (const item of items) {
       next.items[item.id] = {value: item, fetchedAt};
-      memory.set(item.id, item);
     }
     if (query !== undefined) next.lists[query] = {ids: items.map(i => i.id), fetchedAt};
     await AsyncStorage.setItem(key(), JSON.stringify(next)); cached = next;
+    for (const item of items) memory.set(item.id, item);
   });
   serial = job.catch(() => {});
   await job;
@@ -56,6 +56,7 @@ export const opportunityService = {
       catch { return {...result, error: 'Could not save this opportunity on the device.'}; }
       return result;
     }
+    if (result.errorStatus && result.errorStatus >= 400 && result.errorStatus < 500) return result;
     try {
       const old = (await read()).items[id];
       if (old) return {data: old.value, source: 'cache', isMockFallback: false,

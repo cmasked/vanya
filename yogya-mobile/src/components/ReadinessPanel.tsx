@@ -20,7 +20,7 @@ export function ReadinessPanel({opportunityId}: {opportunityId: string}) {
         const data = await integration.readChecklist(opportunityId);
         const cached = await integration.readEligibility(opportunityId);
         if (mounted) {setItems(data); setResult(cached);}
-      } catch { /* Connecting is optional until the student uses a server action. */ }
+      } catch {if (mounted) {setItems([]); setResult(null);}}
     };
     void load();
     const timer = setInterval(() => { if (mounted) void load(); }, 1500);
@@ -36,8 +36,8 @@ export function ReadinessPanel({opportunityId}: {opportunityId: string}) {
   return <View style={{padding: 16, gap: 12}}>
     <Text style={{fontWeight: '700'}}>{t.checklist}</Text>
     <Button title={t.prepare} disabled={busy} onPress={() => void run(async () => {
-      setItems(await integration.prepareChecklist(opportunityId));
       if (!saved.isSaved(opportunityId)) await saved.toggleSave(opportunityId);
+      setItems(await integration.prepareChecklist(opportunityId));
     })} />
     <Button title={t.check} disabled={busy} onPress={() => void run(async () => {
       setResult(await integration.eligibility(opportunityId));
@@ -47,6 +47,7 @@ export function ReadinessPanel({opportunityId}: {opportunityId: string}) {
       <Text>{result.value.status}</Text>
       {(result.value.criteria || []).map((criterion: Record<string, string>) =>
         <Text key={criterion.criterion_id}>{criterion.status}: {criterion.explanation}</Text>)}
+      {(result.value.missing_information || []).map((field: string) => <Text key={field}>Information needed: {field}</Text>)}
       {(result.value.next_steps || []).map((step: string, i: number) => <Text key={i}>{step}</Text>)}
     </View> : null}
     {items.map(item => <View key={item.id} style={{gap: 8}}>

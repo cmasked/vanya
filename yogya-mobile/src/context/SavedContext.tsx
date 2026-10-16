@@ -41,13 +41,15 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let generation = 0;
 
     async function loadSaved() {
+      const ticket = ++generation;
       try {
         await opportunityService.hydrateCache().catch(() => {});
         const ids = await storageService.getSavedOpportunityIds();
-        idsRef.current = ids;
-        if (isMounted) {
+        if (isMounted && ticket === generation) {
+          idsRef.current = ids;
           setSavedIds(ids || []);
         }
       } catch {
@@ -59,10 +61,12 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    loadSaved();
+    void loadSaved();
+    const unsubscribe = storageService.subscribe(() => {void loadSaved();});
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, []);
 
@@ -87,25 +91,32 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
     'demo-' + a.toLowerCase() === b.toLowerCase();
 
   const toggleSave = useCallback((id: string): Promise<boolean> => {
+    const scope = storageService.getScope();
     const job = writes.current.then(async () => {
+      if (storageService.getScope() !== scope) throw new Error('Account changed.');
       if (!id) return false;
       const exists = idsRef.current.some(saved => matches(saved, id));
       const next = exists ? idsRef.current.filter(saved => !matches(saved, id)) : [...idsRef.current, id];
       await syncBookmark(id, !exists);
+      if (storageService.getScope() !== scope) throw new Error('Account changed.');
       await storageService.saveSavedOpportunityIds(next);
       idsRef.current = next; setSavedIds(next);
       return !exists;
     });
     writes.current = job.catch(() => {});
     return job.catch(() => {
-      Alert.alert('Could not save the change', 'Please check device storage and try again.');
+      Alert.alert('Could not save the change', 'Check the account connection and device storage, then try again.');
       return idsRef.current.some(saved => matches(saved, id));
     });
   }, []);
 
   const clearSaved = useCallback((): Promise<void> => {
     const job = writes.current.then(async () => {
-      for (const id of idsRef.current) await syncBookmark(id, false);
+      for (const id of idsRef.current) {
+        if (storageService.getScope() !== scope) throw new Error('Account changed.');
+        await syncBookmark(id, false);
+      }
+      if (storageService.getScope() !== scope) throw new Error('Account changed.');
       await storageService.clearSavedOpportunityIds();
       idsRef.current = []; setSavedIds([]);
     });

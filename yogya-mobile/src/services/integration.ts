@@ -7,11 +7,18 @@ import * as Network from 'expo-network';
 import { AppState, Platform } from 'react-native';
 import { ApiError, getApiBaseUrl } from './api';
 import { createOfflineStore, type OfflineStore, type Operation, type Value } from './offline/core.js';
+import {storageService} from './storage';
+import {opportunityService} from './catalog';
 import type { StudentProfile } from '@/types';
 
 type Session = {id: string; role: string; student_id: string | null; token: string; origin: string};
 let session: Session | null = null, queue: OfflineStore | null = null;
+const stores = new Map<string, OfflineStore>();
 let restoring: Promise<void> | undefined;
+let identityChanges: Promise<unknown> = Promise.resolve();
+function changeIdentity<T>(action: () => Promise<T>): Promise<T> {
+  const job = identityChanges.then(action); identityChanges = job.catch(() => {}); return job;
+}
 let abortSession = new AbortController();
 const TOKEN_KEY = 'yogya.session.v1';
 export let networkLabel = 'Not connected';
@@ -51,48 +58,114 @@ export async function request<T = Value>(path: string, options: RequestInit = {}
     identitySignal.removeEventListener('abort', cancel);
   }
 }
-async function install(value: Session) {
-  abortSession.abort(); abortSession = new AbortController();
-  session = value;
+function assertAccount(account: Session) {
+  if (session !== account) throw new ApiError('Account changed. Reopen this screen.', '/session', 401);
+}
+function requestFor<T = Value>(account: Session, path: string, options: RequestInit = {}) {
+  assertAccount(account);
+  return request<T>(path, options);
+}
+function localProfile(value: Value): StudentProfile {
+  const levels: Record<string, string> = {class_9: 'Class 9', class_10: 'Class 10',
+    class_11: 'Class 11', class_12: 'Class 12', diploma: 'Diploma', undergraduate: 'Undergraduate'};
+  return {id: value.id, displayName: value.display_name,
+    educationLevel: levels[value.education_level] || value.education_level,
+    state: value.state, district: value.district || '', stream: value.course_or_stream || '',
+    institutionType: value.institution_type || '', preferredLanguage: value.preferred_language,
+    mainGoal: value.main_goal || 'Other', interests: value.interests || [],
+    preferredLearningMode: value.preferred_learning_mode || '',
+    isCompleted: true, completedAt: value.updated_at};
+}
+async function publish(account: Session, store: OfflineStore) {
+  const state = await store.snapshot();
+  assertAccount(account);
+  const profile = state.records['profile:' + account.student_id]?.value;
+  if (profile) await storageService.saveProfile(localProfile(profile));
+  assertAccount(account);
+  const ids = Object.entries(state.records).filter(([key, record]) =>
+    key.startsWith('save:') && record.value.saved).map(([key]) => key.slice(5));
+  await storageService.saveSavedOpportunityIds(ids);
+}
+async function install(value: Session, persist = false) {
   const namespace = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value.origin);
-  queue = createOfflineStore(AsyncStorage, '@yogya.sync.' + namespace + '.' + value.id, Crypto.randomUUID);
+  const storeKey = '@yogya.sync.' + namespace + '.' + value.id;
+  const nextQueue = stores.get(storeKey) || createOfflineStore(AsyncStorage, storeKey, Crypto.randomUUID);
+  stores.set(storeKey, nextQueue);
+  await nextQueue.snapshot(); // Detect corruption before changing the active identity.
+  if (persist && Platform.OS !== 'web')
+    await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(value));
+  abortSession.abort(); abortSession = new AbortController();
+  session = value; queue = nextQueue;
+  storageService.setScope(namespace + '.' + value.id);
+  await publish(value, nextQueue);
 }
 export async function restore() {
   if (!restoring) restoring = (async () => {
-    if (Platform.OS === 'web') return; // Browser tokens are intentionally memory-only.
+    if (Platform.OS === 'web') return;
     const raw = await SecureStore.getItemAsync(TOKEN_KEY);
     if (!raw) return;
     const value = JSON.parse(raw) as Session;
+    if (!value || typeof value.id !== 'string' || typeof value.token !== 'string' ||
+        value.role !== 'student' || !(value.student_id === null || typeof value.student_id === 'string'))
+      throw new Error('Stored account needs recovery.');
     if (value.origin === getApiBaseUrl()) await install(value);
   })().catch(error => { restoring = undefined; throw error; });
   await restoring;
 }
+async function hydrate(account: Session, store: OfflineStore) {
+  if (!account.student_id) return;
+  const profile = await requestFor(account, '/students/' + account.student_id);
+  assertAccount(account);
+  await store.cache('profile:' + account.student_id, profile);
+  const saved = await requestFor<Value[]>(account, '/students/' + account.student_id + '/saved-opportunities');
+  assertAccount(account);
+  const remoteIds = new Set(saved.map(row => row.opportunity_id));
+  const state = await store.snapshot();
+  for (const row of saved) {
+    await store.cache('save:' + row.opportunity_id, row);
+    await opportunityService.fetchOpportunityById(row.opportunity_id);
+    assertAccount(account);
+  }
+  // GET returns saved rows only. Reconcile previously known removals individually.
+  for (const key of Object.keys(state.records).filter(key => key.startsWith('save:'))) {
+    const id = key.slice(5);
+    if (!remoteIds.has(id)) await store.cache(key, await requestFor(account,
+      '/students/' + account.student_id + '/saved-opportunities/' + encodeURIComponent(id)));
+  }
+  await publish(account, store);
+}
 export async function connect(token: string) {
   await restore();
-  const previous = session;
-  // Verify the new credential before persisting it or changing the active queue.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000);
-  try {
-    const response = await fetch(origin() + '/api/v1/session', {
-      headers: {Authorization: 'Bearer ' + token.trim()}, signal: controller.signal});
-    if (!response.ok) throw new Error('Could not authenticate this student account.');
-    const value = await response.json();
-    if (typeof value.id !== 'string' || value.role !== 'student') throw new Error('Use a student account token.');
-    const next = {...value, token: token.trim(), origin: origin()} as Session;
-    if (Platform.OS !== 'web') await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(next));
-    await install(next);
-    return next;
-  } catch (error) {
-    session = previous;
-    throw error;
-  } finally { clearTimeout(timer); }
+  return changeIdentity(async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(origin() + '/api/v1/session', {
+        headers: {Authorization: 'Bearer ' + token.trim()}, signal: controller.signal});
+      if (!response.ok) throw new Error('Could not authenticate this student account.');
+      const value = await response.json();
+      if (typeof value.id !== 'string' || value.role !== 'student' ||
+          !(value.student_id === null || typeof value.student_id === 'string'))
+        throw new Error('Use a student account token.');
+      const next = {...value, token: token.trim(), origin: origin()} as Session;
+      await install(next, true);
+      try {await hydrate(next, queue!);}
+      catch (error) {
+        networkLabel = 'Account connected; could not refresh saved data';
+        throw error;
+      }
+      return next;
+    } finally {clearTimeout(timer);}
+  });
 }
 export async function disconnect() {
-  if (Platform.OS !== 'web') await SecureStore.deleteItemAsync(TOKEN_KEY);
-  abortSession.abort(); abortSession = new AbortController();
-  session = null; queue = null;
-  // Pending account-scoped data is retained for recovery with the same account.
+  await restore();
+  return changeIdentity(async () => {
+    if (Platform.OS !== 'web') await SecureStore.deleteItemAsync(TOKEN_KEY);
+    abortSession.abort(); abortSession = new AbortController();
+    session = null; queue = null; networkLabel = 'Not connected';
+    storageService.setScope('guest');
+  });
 }
 async function current() {
   await restore();
@@ -106,30 +179,35 @@ const profileData = (p: StudentProfile) => ({
   preferred_language: p.preferredLanguage, district: p.district || null,
   course_or_stream: p.stream || null, institution_type: p.institutionType || null,
   main_goal: p.mainGoal || null, interests: p.interests,
+  preferred_learning_mode: p.preferredLearningMode || null,
 });
 export async function syncProfile(profile: StudentProfile, initial = false) {
+  const scope = storageService.getScope();
   await restore();
+  if (storageService.getScope() !== scope) throw new Error('Account changed. Reopen your profile.');
   if (!initial && !session) return;
   const {account, store} = await current();
   if (!account.student_id) {
-    const info = await request('/session');
+    const info = await requestFor(account, '/session');
     account.student_id = info.student_id;
   }
   if (!account.student_id) {
-    const created = await request('/students', {method: 'POST',
+    const created = await requestFor(account, '/students', {method: 'POST',
       headers: {'Idempotency-Key': Crypto.randomUUID()}, body: JSON.stringify(profileData(profile))});
     account.student_id = created.id;
     await store.cache('profile:' + created.id, created);
   } else {
     const entity = 'profile:' + account.student_id;
     const cached = (await store.snapshot()).records[entity];
-    if (!cached) await store.cache(entity, await request('/students/' + account.student_id));
+    if (!cached) await store.cache(entity, await requestFor(account, '/students/' + account.student_id));
     const changes = profileData(profile);
     await store.enqueue(entity, changes, {method: 'PATCH',
       path: '/students/' + account.student_id, body: {changes}});
   }
+  assertAccount(account);
   if (Platform.OS !== 'web') await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(account));
-  await flush();
+  await publish(account, store);
+  void flush().catch(() => {});
 }
 export async function flush() {
   const {account, store} = await current();
@@ -141,16 +219,20 @@ export async function flush() {
   networkLabel = 'Connected';
   await store.flush(async (op: Operation) => {
     if (session !== account) throw new ApiError('Connect the original account to sync.', op.path, 401);
-    return request(op.path, {method: op.method, headers: {'Idempotency-Key': op.id},
+    return requestFor(account, op.path, {method: op.method, headers: {'Idempotency-Key': op.id},
       body: JSON.stringify(op.body)});
   });
+  await publish(account, store);
 }
 export async function getStatus() {
   await restore();
   return {connected: Boolean(session), studentId: session?.student_id,
     state: queue ? await queue.snapshot() : null, network: networkLabel};
 }
-export async function retry() { const {store} = await current(); await store.retry(); await flush(); }
+export async function retry() {
+  const {account, store} = await current(); await store.retry(); await flush();
+  await hydrate(account, store);
+}
 export async function prepareChecklist(opportunityId: string) {
   const {account, store} = await current();
   if (!account.student_id) throw new Error('Sync your profile first in Voice & sync.');
@@ -158,16 +240,25 @@ export async function prepareChecklist(opportunityId: string) {
   try {
     const network = await Network.getNetworkStateAsync();
     if (network.isConnected === false || network.isInternetReachable === false) throw new Error('Offline');
-    const saved = await request('/students/' + account.student_id + '/saved-opportunities', {
-      method: 'POST', headers: {'Idempotency-Key': Crypto.randomUUID()},
-      body: JSON.stringify({opportunity_id: opportunityId})});
-    const items = await request<Value[]>('/saved-opportunities/' + saved.id + '/checklist');
+    const entity = 'save:' + opportunityId;
+    const cached = (await store.snapshot()).records[entity];
+    assertAccount(account);
+    if (!cached?.value.saved) await syncBookmark(opportunityId, true);
+    await flush();
+    if ((await store.snapshot()).queue.some(op => op.entity === entity))
+      throw new Error('Save is pending or needs review. Sync it before preparing a new checklist.');
+    const saved = await requestFor(account, '/students/' + account.student_id +
+      '/saved-opportunities/' + encodeURIComponent(opportunityId));
+    if (!saved.saved || !saved.id) throw new Error('Save this opportunity before preparing its checklist.');
+    const items = await requestFor<Value[]>(account, '/saved-opportunities/' + saved.id + '/checklist');
+    assertAccount(account);
     for (const item of items) await store.cache('item:' + item.id, item);
     await store.cache(listKey, {ids: items.map(item => item.id)});
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) throw error;
     if (!(await store.snapshot()).records[listKey]) throw error;
   }
+  assertAccount(account);
   return readChecklist(opportunityId);
 }
 export async function readChecklist(opportunityId: string) {
@@ -187,16 +278,17 @@ export async function setChecklistItem(id: string, completed: boolean) {
   void flush().catch(() => {}); // Local persistence already succeeded.
 }
 export async function reloadServer(entity: string) {
-  const {store} = await current(), state = await store.snapshot();
+  const {account, store} = await current(), state = await store.snapshot();
   const op = state.queue.find(o => o.entity === entity);
   if (!op) return;
-  await store.useServer(entity, await request(op.getPath || op.path));
+  await store.useServer(entity, await requestFor(account, op.getPath || op.path));
+  await publish(account, store);
 }
 export async function eligibility(opportunityId: string) {
   const {account, store} = await current();
   const key = 'eligibility:' + opportunityId;
   try {
-    const value = await request('/eligibility/check', {method: 'POST',
+    const value = await requestFor(account, '/eligibility/check', {method: 'POST',
       body: JSON.stringify({student_id: account.student_id, opportunity_id: opportunityId})});
     await store.cache(key, value);
     return {value, cached: false, fetchedAt: Date.now()};
@@ -249,8 +341,11 @@ export async function readEligibility(opportunityId: string) {
 }
 
 export async function syncBookmark(opportunityId: string, saved: boolean) {
+  const scope = storageService.getScope();
   await restore();
-  if (!session || !queue || !session.student_id || opportunityId.startsWith('demo-')) return;
+  if (storageService.getScope() !== scope) throw new Error('Account changed. Reopen saved opportunities.');
+  if (!session || !queue || opportunityId.startsWith('demo-')) return;
+  if (!session.student_id) throw new Error('Sync your profile before saving to this account.');
   const {account, store} = await current(), entity = 'save:' + opportunityId;
   const path = '/students/' + account.student_id + '/saved-opportunities';
   const getPath = path + '/' + encodeURIComponent(opportunityId);
@@ -260,7 +355,7 @@ export async function syncBookmark(opportunityId: string, saved: boolean) {
       const network = await Network.getNetworkStateAsync();
       if (network.isConnected === false || network.isInternetReachable === false)
         throw new Error('Offline');
-      value = await request(getPath);
+      value = await requestFor(account, getPath);
     }
     catch (error) {
       if (error instanceof ApiError && error.status && error.status < 500) throw error;
@@ -268,6 +363,7 @@ export async function syncBookmark(opportunityId: string, saved: boolean) {
     }
     await store.cache(entity, value);
   }
+  assertAccount(account);
   await store.enqueue(entity, {saved}, {method: 'POST', path, getPath,
     body: {opportunity_id: opportunityId, saved}});
   void flush().catch(() => {});

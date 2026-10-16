@@ -127,3 +127,69 @@ def test_facilitator_scope_and_eligibility_dependency(setup, monkeypatch):
     assert c.get("/api/v1/voice/capabilities", headers=headers(token)).json()["configured"] is False
     assert c.post("/api/v1/voice/transcribe", headers={**headers(token), "Content-Type": "audio/mp4"},
                   content=b"demo").status_code == 503
+
+
+@pytest.mark.parametrize("attributes", [
+    {"annual_family_income": -1}, {"annual_family_income": True},
+    {"age_years": "17"}, {"age_years": 150}, {"min_marks_percentage": 101},
+    {"min_disability_percentage": -1}, {"documents": [""]},
+    {"parent_occupation": "x" * 101}, {"age": 16, "age_years": 17},
+])
+def test_invalid_eligibility_attributes(setup, attributes):
+    c, app, dsn, token, *_ = setup
+    response = c.post("/api/v1/students", headers=headers(token), json={
+        "display_name": "Demo Student", "education_level": "class_11",
+        "state": "Tamil Nadu", "eligibility_attributes": attributes})
+    assert response.status_code == 422
+
+
+def test_engine_receives_canonical_fields_and_rejects_invented_criteria(setup):
+    c, app, dsn, token, *_ = setup
+    sid = student(c, token)
+    update = c.patch("/api/v1/students/" + sid, headers=headers(token), json={
+        "expected_version": 1, "changes": {"eligibility_attributes": {
+            "age": 17, "disability_percentage": 40, "parent_occupation": "beedi_worker",
+            "minimum_academic_qualification": "class_10_pass", "nationality": "Indian"}}})
+    assert update.status_code == 200
+    assert update.json()["eligibility_attributes"]["age_years"] == 17
+    oid = c.get("/api/v1/opportunities").json()["items"][0]["id"]
+    def engine(profile, official):
+        assert profile["current_education_level"] == "class_11"
+        assert profile["age_years"] == 17
+        assert profile["min_disability_percentage"] == 40
+        return {"status": "POTENTIAL_MATCH_NEEDS_INFO",
+                "criteria": [{"criterion_id": x["criterion_id"], "status": "UNKNOWN",
+                              "explanation": "Need more information."}
+                             for x in official["eligibility_criteria"]],
+                "missing_information": ["annual_family_income"], "next_steps": []}
+    app.state.eligibility = engine
+    body = {"student_id": sid, "opportunity_id": oid}
+    valid = c.post("/api/v1/eligibility/check", headers=headers(token), json=body)
+    assert valid.status_code == 200
+    assert all(x["source_reference"].startswith("https://") for x in valid.json()["criteria"])
+    def invented(profile, official):
+        value = engine(profile, official)
+        value["criteria"].append({"criterion_id": "invented", "status": "SATISFIED",
+                                  "explanation": "Not from the source."})
+        return value
+    app.state.eligibility = invented
+    assert c.post("/api/v1/eligibility/check", headers=headers(token), json=body).status_code == 503
+    def wrong_source(profile, official):
+        value = engine(profile, official)
+        value["criteria"][0]["source_reference"] = "https://unrelated.example"
+        return value
+    app.state.eligibility = wrong_source
+    assert c.post("/api/v1/eligibility/check", headers=headers(token), json=body).status_code == 503
+
+
+def test_checklist_preparation_cannot_resurrect_unsaved_record(setup):
+    c, app, dsn, token, *_ = setup
+    sid = student(c, token)
+    oid = c.get("/api/v1/opportunities").json()["items"][0]["id"]
+    path = f"/api/v1/students/{sid}/saved-opportunities"
+    first = c.post(path, headers=headers(token), json={"opportunity_id": oid, "expected_version": 0})
+    assert first.status_code == 200
+    assert c.post(path, headers=headers(token), json={
+        "opportunity_id": oid, "saved": False, "expected_version": 1}).status_code == 200
+    assert c.post(path, headers=headers(token), json={"opportunity_id": oid}).status_code == 409
+    assert c.get(path + "/" + oid, headers=headers(token)).json()["saved"] is False

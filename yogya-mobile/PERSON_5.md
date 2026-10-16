@@ -89,3 +89,10 @@ complete device demonstration still require device/provider validation.
 Latest observed CI result: all configured checks, including real HTTP core/backend
 synchronization QA, passed on abb6380bf70880328536ed4f78d35ec5c85aa20c.
 Evidence: https://github.com/cmasked/vanya/actions/runs/38938017410
+
+## Audit corrections
+Profiles and bookmarks now follow the active server/account scope. Connect the intended
+student before onboarding; connecting an existing student loads their server profile.
+Guest drafts stay separate. Read [the audit](../docs/IMPLEMENTATION_AUDIT.md) for migration
+behavior, remaining dependencies and test limits. Run `node tests/account-integration.test.cjs`
+from yogya-mobile for the actual integration-service regression test with mocked native APIs.

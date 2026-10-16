@@ -6,7 +6,7 @@ import httpx
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from psycopg.types.json import Jsonb
-from schemas import EligibilityResult
+from schemas import EligibilityResult, Profile
 
 def student(db, actor, student_id, write=False):
     row = db.execute("SELECT * FROM yogya_students WHERE id=%s", (student_id,)).fetchone()
@@ -84,6 +84,19 @@ def mobile_opportunity(row):
 
 def validate_eligibility(value, official):
     result = EligibilityResult.model_validate(value)
+    known = {c["criterion_id"]: c for c in official["eligibility_criteria"]}
+    evidence = {e["evidence_id"]: e["source_url"] for e in official.get("evidence", [])}
+    for criterion in result.criteria:
+        source = known.get(criterion.criterion_id)
+        if source is None:
+            raise ValueError("Unknown criterion in engine result")
+        reference = source.get("evidence_reference")
+        url = evidence.get(reference)
+        if criterion.source_reference and criterion.source_reference not in {reference, url}:
+            raise ValueError("Engine source does not match curated evidence")
+        criterion.source_reference = url or reference
+    if not known and result.status in {"ELIGIBLE", "ELIGIBLE_NEEDS_DOCUMENTS"}:
+        raise ValueError("No criteria available to substantiate eligibility")
     mandatory = {c["criterion_id"] for c in official["eligibility_criteria"]
                  if c["required"] and c["condition_type"] == "mandatory"}
     ids = [c.criterion_id for c in result.criteria]
@@ -96,6 +109,12 @@ def validate_eligibility(value, official):
     if result.status == "ELIGIBLE" and "REQUIRES_VERIFICATION" in states:
         raise ValueError("Documents still require verification")
     return result.model_dump()
+
+def engine_profile(profile):
+    """Add canonical data-field names without inferring unprovided qualifications."""
+    value = Profile.model_validate(profile).model_dump()
+    return {**value, **value["eligibility_attributes"],
+            "current_education_level": value["education_level"]}
 
 def eligibility(profile, official):
     endpoint = os.getenv("ELIGIBILITY_SERVICE_URL")

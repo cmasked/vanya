@@ -58,6 +58,9 @@ jobs:
         working-directory: yogya-mobile
         run: |
           npx tsc --noEmit
+          if test -f tests/account-integration.test.cjs; then
+            node tests/account-integration.test.cjs
+          fi
           if test -f tests/offline.test.mjs; then
             node tests/offline.test.mjs
           fi

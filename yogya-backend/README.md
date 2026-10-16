@@ -45,12 +45,16 @@ are serialized with a PostgreSQL row lock. Profile PATCH accepts
 {expected_version,changes}; checklist PATCH accepts {expected_version,completed}.
 Conflict returns 409 without overwriting current data. Saved-opportunity POST
 accepts {opportunity_id,saved,expected_version?}; version zero means no server row.
-A POST without expected_version is an explicit save intent; an unchanged save
-does not advance the version. Checklist completion never submits an application.
+A POST without expected_version may create a record or repeat its current state.
+Changing an existing saved/unsaved state requires expected_version; otherwise it returns 409. Checklist completion never submits an application.
 Receipts currently have no expiry; introduce coordinated retention before large-scale use.
 
 Person 3 adapter: ELIGIBILITY_SERVICE_URL receives {student,opportunity}, where
-student is schemas.Profile (optional scheme attributes are in eligibility_attributes)
+student includes schemas.Profile plus canonical aliases at the top level:
+current_education_level and validated eligibility_attributes (also retained as a nested object).
+Use age_years, min_disability_percentage, annual_family_income, parent_occupation,
+minimum_academic_qualification and nationality as applicable. Current education never
+implies a completed qualification. Historical age/disability_percentage inputs are normalized
 and opportunity preserves canonical PostgreSQL fields plus structured criteria,
 documents and evidence. Return schemas.EligibilityResult, using the original
 criterion_id values. All mandatory criteria must be reported. Calendar status
@@ -85,3 +89,5 @@ idempotency, conflicts, engine invocation/failure and mocked speech transport.
 CI evidence: https://github.com/cmasked/vanya/actions/runs/38937767592
 The local cloud workspace is unavailable. Docker builds, real provider access,
 production deployment and Android device behavior have not been validated.
+
+See [the implementation audit](../docs/IMPLEMENTATION_AUDIT.md) for current gaps and validation scope.

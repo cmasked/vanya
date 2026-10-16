@@ -153,7 +153,7 @@ export default function SavedScreen() {
               <View style={styles.list}>
                 {savedOpportunities.map((opp) => {
                   const meta = CATEGORY_META[opp.type] || CATEGORY_META.scholarship;
-                  const deadlineText = opp.deadline || 'Open / Ongoing';
+                  const deadlineText = opp.deadline || 'Deadline not confirmed';
 
                   const handleNavigate = () => {
                     router.push({

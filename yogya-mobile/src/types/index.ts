@@ -140,6 +140,7 @@ export interface OpportunitiesResult {
 }
 
 export interface OpportunityDetailResult {
+  errorStatus?: number;
   data: Opportunity | null;
   source: DataSource;
   isMockFallback: boolean;
