@@ -18,6 +18,7 @@ import React, {
 } from 'react';
 import type { OnboardingFormData, StudentProfile } from '@/types';
 import { storageService } from '@/services/storage';
+import {syncProfile, disconnect} from '@/services/integration';
 
 export const INITIAL_ONBOARDING_FORM: OnboardingFormData = {
   displayName: '',
@@ -109,6 +110,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       };
 
       await storageService.saveProfile(newProfile);
+      await syncProfile(newProfile);
       setProfile(newProfile);
       return newProfile;
     },
@@ -116,6 +118,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearProfile = useCallback(async () => {
+    await disconnect();
     await storageService.clearProfile();
     setProfile(null);
     setDraftForm(INITIAL_ONBOARDING_FORM);

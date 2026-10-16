@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { MOCK_OPPORTUNITIES } from '@/data/mock';
-import { opportunityService } from '@/services/opportunities';
+import { opportunityService } from '@/services/catalog';
 import type { DataSource, Opportunity } from '@/types';
 
 interface UseOpportunitiesOptions {

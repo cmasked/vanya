@@ -33,13 +33,9 @@ let memorySavedCache: string[] | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
 
 function enqueueWrite(operation: () => Promise<void>): Promise<void> {
-  writeQueue = writeQueue
-    .then(operation)
-    .catch((err) => {
-      // Log generic operational message without private data
-      console.warn('YogyaStorage: Persistent storage write failed:', err?.message || 'Unknown error');
-    });
-  return writeQueue;
+  const next = writeQueue.then(operation);
+  writeQueue = next.catch(() => {});
+  return next; // Report a failed durable write to the caller.
 }
 
 /**
@@ -80,7 +76,6 @@ export const storageService = {
    * Save the completed student profile
    */
   async saveProfile(profile: StudentProfile): Promise<void> {
-    memoryProfileCache = profile;
 
     await enqueueWrite(async () => {
       const serialized = JSON.stringify(profile);
@@ -95,6 +90,7 @@ export const storageService = {
         }
       }
     });
+    memoryProfileCache = profile;
   },
 
   /**
@@ -134,7 +130,6 @@ export const storageService = {
    * Clear or reset the student profile
    */
   async clearProfile(): Promise<void> {
-    memoryProfileCache = null;
 
     await enqueueWrite(async () => {
       await AsyncStorage.removeItem(PROFILE_STORAGE_KEY);
@@ -147,13 +142,13 @@ export const storageService = {
         }
       }
     });
+    memoryProfileCache = null;
   },
 
   /**
    * Save array of bookmarked opportunity IDs
    */
   async saveSavedOpportunityIds(ids: string[]): Promise<void> {
-    memorySavedCache = [...ids];
 
     await enqueueWrite(async () => {
       const serialized = JSON.stringify(ids);
@@ -167,6 +162,7 @@ export const storageService = {
         }
       }
     });
+    memorySavedCache = [...ids];
   },
 
   /**
@@ -205,7 +201,6 @@ export const storageService = {
    * Clear all saved opportunity bookmarks
    */
   async clearSavedOpportunityIds(): Promise<void> {
-    memorySavedCache = [];
 
     await enqueueWrite(async () => {
       await AsyncStorage.removeItem(SAVED_OPPORTUNITIES_STORAGE_KEY);
@@ -218,5 +213,6 @@ export const storageService = {
         }
       }
     });
+    memorySavedCache = [];
   },
 };

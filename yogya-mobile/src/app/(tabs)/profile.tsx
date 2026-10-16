@@ -8,6 +8,7 @@
  * - Privacy protection notice guaranteeing no sensitive identity/bank data stored
  */
 
+import {integrationStrings} from '@/constants/integrationStrings';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -122,6 +123,11 @@ export default function ProfileScreen() {
                   </View>
                 </View>
 
+                <YButton
+                  title={integrationStrings[profile?.preferredLanguage === 'Tamil' ? 'ta' : 'en'].settings}
+                  onPress={() => router.push('/voice-sync')}
+                  fullWidth
+                />
                 <YButton
                   title="Edit Profile Details"
                   variant="outline"

@@ -1,7 +1,6 @@
-# Person 2 full-project branch
+# Person 2 in the combined project
 
-This branch contains the complete upstream application and the Person 2 backend.
-Follow yogya-backend/README.md to configure PostgreSQL, migrate, seed and run tests.
-See docs/WORKING_REPOSITORY.md for the repository's branch layout.
-The earlier handoff package remains preserved on person-2/backend.
-The complete application with Person 5 is on integration/yogya-complete.
+The backend is already integrated with the complete source project on this branch.
+Follow yogya-backend/README.md for database setup, API configuration and tests.
+Person 5's mobile services are present in the same working tree.
+The earlier handoff-only package remains on person-2/backend.

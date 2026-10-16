@@ -13,6 +13,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 
+import {SyncBridge} from '@/components/SyncBridge';
 import { Colors } from '@/constants/theme';
 import { ProfileProvider, useStudentProfile } from '@/context/ProfileContext';
 import { SavedProvider, useSavedOpportunities } from '@/context/SavedContext';
@@ -58,6 +59,7 @@ function RootNavigator() {
   return (
     <>
       <StatusBar style="dark" />
+      <SyncBridge />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -67,6 +69,7 @@ function RootNavigator() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="voice-sync" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="opportunity/[id]" />
       </Stack>

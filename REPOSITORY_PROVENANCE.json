@@ -17,6 +17,12 @@
     "person_5": "c73f2f3cdff47a4b36bfb0e722161b93eab5bcfa"
   },
   "working_repository": "https://github.com/cmasked/vanya",
-  "role": "Person 2's backend",
-  "branch": "person-2/full-project"
+  "role": "Person 2 and Person 5 integrated",
+  "branch": "integration/yogya-complete",
+  "integrated_role_heads": {
+    "person_2": "1239648f2d4561a14e6d1021b5211c1de33fc763",
+    "person_5": "1c54038da537d7a9e0f0115bd44b4d6c7b8cc43c"
+  },
+  "source_file_count": 183,
+  "preserved_target_main": "5a8efdd40fc19750a0ccc657962c4a5e419b896d"
 }
