@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool, PoolTimeout
-from schemas import (ChecklistUpdate, EligibilityRequest, Profile, ProfileUpdate,
+from schemas import (ChecklistUpdate, EligibilityRequest, Profile, ProfileUpdate, RecommendationRequest,
                      SaveRequest, Transcript)
 import services as service
 from dotenv import load_dotenv
@@ -171,8 +171,30 @@ def create_app(database_url=None):
             raise
         except Exception:
             raise HTTPException(503, "Eligibility service is unavailable or returned an invalid result")
-        return {**result, "student_id": body.student_id, "opportunity_id": body.opportunity_id,
+        from yogya_ai_engine import build_application_checklist, explain_eligibility
+        checklist_items = build_application_checklist(official, profile["profile"], result)
+        return {**result, "explanation": explain_eligibility(result),
+                "checklist": service.resolve_checklist_sources(checklist_items, official),
+                "student_id": body.student_id, "opportunity_id": body.opportunity_id,
                 "profile_version": profile["version"]}
+
+    @app.post("/api/v1/opportunities/recommend")
+    def recommend(body: RecommendationRequest, db: DB, actor: Actor):
+        from yogya_ai_engine import recommend_opportunities
+        profile = service.student(db, actor, body.student_id, write=True)
+        ids = db.execute(
+            "SELECT opportunity_id FROM opportunities WHERE verification_status='verified' "
+            "AND synthetic=FALSE ORDER BY opportunity_id LIMIT 1000").fetchall()
+        records = [service.opportunity(db, item["opportunity_id"]) for item in ids]
+        try:
+            ranked = recommend_opportunities(service.engine_profile(profile["profile"]), records, body.limit)
+        except (ValueError, TypeError, KeyError):
+            raise HTTPException(503, "Opportunity matching could not safely process the current records")
+        return {"items": [{
+            **service.mobile_opportunity(item["opportunity"]),
+            "match_score": item["score"], "match_reasons": item["reasons"],
+            "eligibility": service.validate_eligibility(item["eligibility"], item["opportunity"]),
+        } for item in ranked], "profile_version": profile["version"]}
 
     @app.post("/api/v1/students/{student_id}/saved-opportunities")
     def save(student_id: str, body: SaveRequest, request: Request, db: DB,

@@ -31,9 +31,10 @@ The data pipeline remains in yogya-data with its original source references.
 
 ## Configuration and verification
 Use per-developer .env files and individual prototype student tokens. Real provider
-credentials are not included. Person 3's eligibility service and a speech adapter
-need separate configuration. Device microphone/audio and Android flows still need
-physical-device or emulator validation.
+credentials are not included. Person 3's local engine requires installation with
+`python -m pip install -e yogya-ai-engine`; only the speech adapter needs provider
+configuration. Device microphone/audio and Android flows still need physical-device
+or emulator validation.
 
 The full-project workflow runs the original data tests, applicable backend tests,
 mobile TypeScript/Expo checks and available queue/HTTP integration checks. It can

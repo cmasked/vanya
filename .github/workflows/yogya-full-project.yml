@@ -36,6 +36,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install -r yogya-data/requirements.txt
+          python -m pip install -e yogya-ai-engine
           if test -f yogya-backend/requirements.txt; then
             python -m pip install -r yogya-backend/requirements.txt
           fi

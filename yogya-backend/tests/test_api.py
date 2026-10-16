@@ -183,6 +183,21 @@ def test_engine_receives_canonical_fields_and_rejects_invented_criteria(setup):
     assert c.post("/api/v1/eligibility/check", headers=headers(token), json=body).status_code == 503
 
 
+def test_recommendation_uses_verified_catalog_and_returns_explanations(setup):
+    c, app, dsn, token, stranger, *_ = setup
+    sid = student(c, token)
+    response = c.post("/api/v1/opportunities/recommend", headers=headers(token),
+                      json={"student_id": sid, "limit": 5})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["profile_version"] == 1
+    assert 0 < len(payload["items"]) <= 5
+    assert all("match_score" in item and item["match_reasons"] for item in payload["items"])
+    assert all(item["isVerified"] for item in payload["items"])
+    assert c.post("/api/v1/opportunities/recommend", headers=headers(stranger),
+                  json={"student_id": sid}).status_code == 404
+
+
 def test_checklist_preparation_cannot_resurrect_unsaved_record(setup):
     c, app, dsn, token, *_ = setup
     sid = student(c, token)

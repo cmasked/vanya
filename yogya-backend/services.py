@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from psycopg.types.json import Jsonb
 from schemas import EligibilityResult, Profile
+from yogya_ai_engine import evaluate_eligibility
 
 def student(db, actor, student_id, write=False):
     row = db.execute("SELECT * FROM yogya_students WHERE id=%s", (student_id,)).fetchone()
@@ -110,6 +111,15 @@ def validate_eligibility(value, official):
         raise ValueError("Documents still require verification")
     return result.model_dump()
 
+def resolve_checklist_sources(items, official):
+    """Replace checklist evidence IDs with their curated source URLs when present."""
+    urls = {item["evidence_id"]: item["source_url"]
+            for item in official.get("evidence", [])
+            if item.get("evidence_id") and item.get("source_url")}
+    return [{**item, "source_reference": urls.get(item.get("source_reference"),
+                                                    item.get("source_reference"))}
+            for item in items]
+
 def engine_profile(profile):
     """Add canonical data-field names without inferring unprovided qualifications."""
     value = Profile.model_validate(profile).model_dump()
@@ -117,16 +127,8 @@ def engine_profile(profile):
             "current_education_level": value["education_level"]}
 
 def eligibility(profile, official):
-    endpoint = os.getenv("ELIGIBILITY_SERVICE_URL")
-    if not endpoint:
-        raise HTTPException(503, "Person 3 eligibility service is not configured")
-    headers = {"Authorization": "Bearer " + os.environ["ELIGIBILITY_SERVICE_TOKEN"]} \
-        if os.getenv("ELIGIBILITY_SERVICE_TOKEN") else {}
+    """Run the local deterministic Person 3 engine against the backend records."""
     try:
-        with httpx.Client(timeout=15, follow_redirects=False) as client:
-            response = client.post(endpoint, headers=headers,
-                                   json=jsonable_encoder({"student": profile, "opportunity": official}))
-            response.raise_for_status()
-            return validate_eligibility(response.json(), official)
-    except (httpx.HTTPError, ValueError, TypeError):
-        raise HTTPException(503, "Eligibility service is unavailable or returned an invalid result")
+        return evaluate_eligibility(profile, official)
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(503, "Eligibility engine could not safely evaluate this opportunity")

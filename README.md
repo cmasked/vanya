@@ -13,6 +13,7 @@ cd vanya
 - [Implementation audit and remaining work](docs/IMPLEMENTATION_AUDIT.md)
 - [Repository and branch guide](docs/WORKING_REPOSITORY.md)
 - [Backend setup, database migrations and API](yogya-backend/README.md)
+- [Person 3 AI and eligibility engine](yogya-ai-engine/README.md)
 - [Mobile setup](yogya-mobile/README.md)
 - [Voice, offline behavior, synchronization and device checks](yogya-mobile/PERSON_5.md)
 - [Opportunity data pipeline](yogya-data/README.md)
@@ -31,7 +32,7 @@ Create feature branches from `main` and submit pull requests back to `main`.
 ## Running the backend
 With Python 3.12+, PostgreSQL, and a local `yogya-backend/.env` configured:
 ```sh
-python -m pip install -r yogya-data/requirements.txt -r yogya-backend/requirements.txt
+python -m pip install -r yogya-data/requirements.txt -r yogya-backend/requirements.txt -e yogya-ai-engine
 cd yogya-backend
 python manage.py migrate
 python manage.py seed
@@ -57,7 +58,7 @@ GitHub Actions runs the original data pipeline tests, PostgreSQL backend tests,
 queue regression assertions, TypeScript/Expo compatibility and real HTTP queue-to-
 backend synchronization checks. See the branch's Actions result for observed status.
 
-Configure Person 3's eligibility service and an actual speech adapter for live
-eligibility and speech recognition. Missing services return explicit unavailable
-responses. Android microphone/audio and the full real-device demonstration still
-need device testing. Checklist completion does not submit an application.
+Person 3's deterministic eligibility and matching engine is integrated with the
+backend. Configure a speech adapter for speech recognition. Android microphone/audio
+and the full real-device demonstration still need device testing. Checklist
+completion does not submit an application.

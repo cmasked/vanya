@@ -64,6 +64,10 @@ class EligibilityRequest(StrictModel):
     student_id: Text
     opportunity_id: Text
 
+class RecommendationRequest(StrictModel):
+    student_id: Text
+    limit: int = Field(default=20, ge=1, le=100)
+
 class Criterion(StrictModel):
     criterion_id: Text
     status: Literal["SATISFIED", "NOT_SATISFIED", "UNKNOWN", "REQUIRES_VERIFICATION"]

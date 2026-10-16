@@ -34,7 +34,7 @@ GitHub Actions because the local execution workspace is unavailable.
 |---|---|---|
 | Person 1 | Onboarding, profile, catalog, saved/detail screens; integration controls | Facilitator screens; full interface localization; scheme-specific missing-information input workflow |
 | Person 2 | PostgreSQL migrations, scoped prototype authentication, APIs, deterministic service boundary, versioned writes | Production identity/recovery/rate limiting if deploying beyond the controlled prototype |
-| Person 3 | External request/response contract and validation | Actual eligibility engine, natural-language extraction, ranking, explanations, personalized learning/alternative pathways |
+| Person 3 | `yogya-ai-engine` profile normalization, deterministic four-state eligibility, verified-record ranking, grounded explanations, document/action checklists, backend integration | Rich natural-language extraction, personalized learning/alternative pathways, grouped/exception rule support |
 | Person 4 | Fourteen curated records, importer, source/evidence schema and data tests | Independently verify current rules/statuses and completeness of every record against specific official documents |
 | Person 5 | Voice capture UI, editable text, device TTS, authenticated speech boundary, persistence and offline queue | Actual configured speech-provider adapter and provider testing; Android microphone/audio and full real-device demo |
 

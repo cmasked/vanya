@@ -5,7 +5,7 @@ opportunities/criteria/documents/evidence tables. No competing eligibility engin
 Local setup, from repository root:
     python -m venv work/venv
     . work/venv/bin/activate
-    pip install -r yogya-backend/requirements.txt -r yogya-data/requirements.txt
+    pip install -e yogya-ai-engine -r yogya-backend/requirements.txt -r yogya-data/requirements.txt
     cd yogya-backend
     cp .env.example .env
 Set DATABASE_URL to a development PostgreSQL database, then:
@@ -33,7 +33,7 @@ credentials, HTTPS termination and restricted database networking when deploying
 Routes are under /api/v1, preserving the mobile client's existing contract.
 Public: GET /health, /opportunities, /opportunities/{id}.
 Authenticated: GET /session; POST /students; GET/PATCH /students/{id};
-POST /eligibility/check; POST/GET /students/{id}/saved-opportunities;
+POST /eligibility/check; POST /opportunities/recommend; POST/GET /students/{id}/saved-opportunities;
 GET /students/{id}/saved-opportunities/{opportunity_id};
 GET /saved-opportunities/{saved_id}/checklist; GET/PATCH /checklist-items/{id};
 GET /facilitators/{id}/students; GET /voice/capabilities; POST /voice/transcribe.
@@ -49,18 +49,18 @@ A POST without expected_version may create a record or repeat its current state.
 Changing an existing saved/unsaved state requires expected_version; otherwise it returns 409. Checklist completion never submits an application.
 Receipts currently have no expiry; introduce coordinated retention before large-scale use.
 
-Person 3 adapter: ELIGIBILITY_SERVICE_URL receives {student,opportunity}, where
-student includes schemas.Profile plus canonical aliases at the top level:
-current_education_level and validated eligibility_attributes (also retained as a nested object).
-Use age_years, min_disability_percentage, annual_family_income, parent_occupation,
-minimum_academic_qualification and nationality as applicable. Current education never
-implies a completed qualification. Historical age/disability_percentage inputs are normalized
-and opportunity preserves canonical PostgreSQL fields plus structured criteria,
-documents and evidence. Return schemas.EligibilityResult, using the original
-criterion_id values. All mandatory criteria must be reported. Calendar status
-remains separate from eligibility. Unsupported grouped-rule formats should be
-versioned with Person 3; this adapter passes source data without inventing rules.
-Missing/unavailable/invalid engine returns 503, never a success placeholder.
+Person 3 engine: install it from the repository root with
+`python -m pip install -e yogya-ai-engine`. The existing POST
+`/api/v1/eligibility/check` and new POST `/api/v1/opportunities/recommend`
+use the local deterministic `yogya_ai_engine` package. The eligibility request
+uses schemas.Profile plus canonical aliases such as `current_education_level`
+and validated eligibility attributes. Current education never implies a
+completed qualification. Opportunity records preserve canonical fields,
+structured criteria, documents, and evidence. Results use original
+`criterion_id` values, include every mandatory criterion, and resolve evidence
+IDs to curated URLs. Calendar status remains separate from eligibility.
+Unsupported grouped-rule formats need a versioned contract with Person 4.
+Engine data errors return 503 rather than an eligibility success placeholder.
 
 Speech adapter: SPEECH_ADAPTER_URL accepts raw audio/mp4, audio/m4a, audio/wav or
 audio/webm, with X-Speech-Language (en-IN or ta-IN by default) and optional
