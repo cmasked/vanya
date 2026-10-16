@@ -2,7 +2,20 @@
   "source_repository": "https://github.com/Foxtrot81/Yogya-AI-Powered-Oppurtunity-Navigator",
   "source_main_commit": "4049a401d53b4b9624fab705d250ae66fede0be8",
   "source_main_tree": "e53cd8394611a9f5d77f6f376ce6c8cdf47ae553",
-  "preserved_source_branches": [
+  "contribution_heads": {
+    "person_2": "71f2bee29aaa7d224b6b59a6b2d2618c75708e1f",
+    "person_5": "c73f2f3cdff47a4b36bfb0e722161b93eab5bcfa"
+  },
+  "working_repository": "https://github.com/cmasked/vanya",
+  "role": "Person 2 and Person 5 integrated",
+  "branch": "main",
+  "integrated_role_heads": {
+    "person_2": "1239648f2d4561a14e6d1021b5211c1de33fc763",
+    "person_5": "1c54038da537d7a9e0f0115bd44b4d6c7b8cc43c"
+  },
+  "source_file_count": 183,
+  "original_target_main": "5a8efdd40fc19750a0ccc657962c4a5e419b896d",
+  "source_branch_revisions": [
     {
       "name": "feature/yogya-mobile-frontend",
       "sha": "fd7a8992a5429de13be20e79b9b8ee17b51ac057"
@@ -12,17 +25,9 @@
       "sha": "4049a401d53b4b9624fab705d250ae66fede0be8"
     }
   ],
-  "contribution_heads": {
-    "person_2": "71f2bee29aaa7d224b6b59a6b2d2618c75708e1f",
-    "person_5": "c73f2f3cdff47a4b36bfb0e722161b93eab5bcfa"
-  },
-  "working_repository": "https://github.com/cmasked/vanya",
-  "role": "Person 2 and Person 5 integrated",
-  "branch": "integration/yogya-complete",
-  "integrated_role_heads": {
-    "person_2": "1239648f2d4561a14e6d1021b5211c1de33fc763",
-    "person_5": "1c54038da537d7a9e0f0115bd44b4d6c7b8cc43c"
-  },
-  "source_file_count": 183,
-  "preserved_target_main": "5a8efdd40fc19750a0ccc657962c4a5e419b896d"
+  "working_branches": [
+    "main",
+    "person-2/full-project",
+    "person-5/full-project"
+  ]
 }

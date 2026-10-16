@@ -5,24 +5,22 @@ and voice/offline work. Source files, assets, licenses and Git history were impo
 from Foxtrot81/Yogya-AI-Powered-Oppurtunity-Navigator.
 
 ## Full-project branches
-- integration/yogya-complete: complete upstream application plus Person 2 and Person 5.
+- main: complete upstream application plus Person 2 and Person 5.
 - person-2/full-project: complete upstream application plus the backend contribution.
 - person-5/full-project: complete upstream application plus voice/offline integration.
 
-## Preserved branches
-- upstream/foxtrot-main is an exact copy of source main at 4049a401d53b4b9624fab705d250ae66fede0be8.
-- upstream/foxtrot-mobile-frontend preserves source feature/yogya-mobile-frontend
-  at fd7a8992a5429de13be20e79b9b8ee17b51ac057.
-- person-2/backend and person-5/voice-offline-sync retain the earlier additive handoff packages.
-- main retains the original handoff README; this migration publishes working code on branches.
+## Source history
+The original source commits remain in Git ancestry. Their identifiers are recorded
+in REPOSITORY_PROVENANCE.json. Temporary import branches, source snapshot branches
+and earlier additive handoff branches have been removed after integration.
 
 ## Start working
 ```sh
-git clone --branch integration/yogya-complete https://github.com/cmasked/vanya.git
+git clone https://github.com/cmasked/vanya.git
 cd vanya
 git switch -c feature/YOUR_TASK
 ```
-Create feature branches from the complete integration branch and use pull requests
+Create feature branches from main and use pull requests
 to share changes. The full-project role branches already contain the upstream app;
 their included handoff patch is a provenance artifact and has already been applied
 where Person 5 is integrated.

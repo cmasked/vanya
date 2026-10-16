@@ -6,7 +6,7 @@ and Person 5's integrated voice/offline/synchronization work.
 
 ## Start here
 ```sh
-git clone --branch integration/yogya-complete https://github.com/cmasked/vanya.git
+git clone https://github.com/cmasked/vanya.git
 cd vanya
 ```
 
@@ -19,13 +19,13 @@ cd vanya
 - [Source provenance](REPOSITORY_PROVENANCE.json)
 
 ## Full-project branches
-- `integration/yogya-complete`: both roles integrated; recommended starting point for team work.
+- `main`: both roles integrated; the starting point for team work.
 - `person-2/full-project`: complete upstream project plus the backend.
 - `person-5/full-project`: complete upstream project plus voice/offline integration.
 
-The `upstream/foxtrot-*` branches preserve the original source history and trees.
-Earlier additive handoff branches are retained. `main` is preserved; all full-project
-branches share its ancestry and can be reviewed/merged using normal Git workflows.
+The repository keeps these three working branches. Original source history remains
+in their Git ancestry; source revision identifiers are recorded in the provenance file.
+Create feature branches from `main` and submit pull requests back to `main`.
 
 ## Running the backend
 With Python 3.12+, PostgreSQL, and a local `yogya-backend/.env` configured:

@@ -1,9 +1,9 @@
 name: Full Yogya project checks
 on:
   push:
-    branches: ['person-2/full-project', 'person-5/full-project', 'integration/yogya-complete']
+    branches: ['person-2/full-project', 'person-5/full-project', 'main']
   pull_request:
-    branches: ['main', 'integration/yogya-complete']
+    branches: ['main']
   workflow_dispatch:
 permissions:
   contents: read
@@ -74,7 +74,7 @@ jobs:
         run: |
           if ! git diff --quiet -- yogya-mobile/package-lock.json; then
             case "$GITHUB_REF_NAME" in
-              person-2/full-project|person-5/full-project|integration/yogya-complete) ;;
+              main|person-2/full-project|person-5/full-project) ;;
               *) exit 1 ;;
             esac
             git config user.name "github-actions[bot]"
